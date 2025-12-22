@@ -1,6 +1,7 @@
 //! 処理パイプライン
 
 use image::RgbaImage;
+use log::debug;
 
 use crate::config::ProcessConfig;
 use crate::processor::{
@@ -20,16 +21,16 @@ impl ChromaPipeline {
 
     /// 画像を処理
     pub fn process(&self, image: &RgbaImage) -> RgbaImage {
-        self.log("Processing started...");
+        debug!("Processing started...");
 
         // 1. クロマキーマスク生成
         let mask = create_chroma_mask(image, &self.config.chroma_color, self.config.tolerance);
-        self.log("Mask generation completed");
+        debug!("Mask generation completed");
 
         // 2. モルフォロジー演算
         let mask = if self.config.erode_iterations > 0 {
             let result = erode(&mask, self.config.erode_iterations);
-            self.log(&format!("Erode completed ({} iterations)", self.config.erode_iterations));
+            debug!("Erode completed ({} iterations)", self.config.erode_iterations);
             result
         } else {
             mask
@@ -37,7 +38,7 @@ impl ChromaPipeline {
 
         let mask = if self.config.dilate_iterations > 0 {
             let result = dilate(&mask, self.config.dilate_iterations);
-            self.log(&format!("Dilate completed ({} iterations)", self.config.dilate_iterations));
+            debug!("Dilate completed ({} iterations)", self.config.dilate_iterations);
             result
         } else {
             mask
@@ -45,15 +46,15 @@ impl ChromaPipeline {
 
         // 3. アルファチャンネル生成
         let alpha_channel = create_alpha_from_mask(&mask);
-        self.log("Alpha channel generation completed");
+        debug!("Alpha channel generation completed");
 
         // 4. フェザリング
         let alpha_channel = if self.config.feather_amount > 0 {
             let result = feather_alpha(&alpha_channel, self.config.feather_amount);
-            self.log(&format!(
+            debug!(
                 "Feathering completed (amount={})",
                 self.config.feather_amount
-            ));
+            );
             result
         } else {
             alpha_channel
@@ -67,24 +68,17 @@ impl ChromaPipeline {
                 &self.config.chroma_color,
                 self.config.despill_strength,
             );
-            self.log(&format!(
+            debug!(
                 "Despill completed (strength={})",
                 self.config.despill_strength
-            ));
+            );
         }
 
         // 6. アルファチャンネル適用
         apply_alpha(&mut result, &alpha_channel);
-        self.log("Alpha channel applied");
+        debug!("Alpha channel applied");
 
         result
-    }
-
-    /// 詳細ログ出力（verboseモード時のみ）
-    fn log(&self, message: &str) {
-        if self.config.verbose {
-            eprintln!("[chroma-transparent] {}", message);
-        }
     }
 }
 

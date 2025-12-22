@@ -162,9 +162,13 @@ pub struct Args {
     #[arg(long)]
     pub enable_video: bool,
 
-    /// 詳細ログを出力
+    /// 詳細ログを出力（-v: debug, -vv: trace）
+    #[arg(short, long, action = clap::ArgAction::Count)]
+    pub verbose: u8,
+
+    /// 静音モード（エラーのみ出力）
     #[arg(short, long)]
-    pub verbose: bool,
+    pub quiet: bool,
 }
 
 impl Args {
@@ -338,7 +342,8 @@ mod tests {
             storage_dir: None,
             #[cfg(all(feature = "server", feature = "video"))]
             enable_video: false,
-            verbose: false,
+            verbose: 0,
+            quiet: false,
         }
     }
 

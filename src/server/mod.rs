@@ -17,6 +17,7 @@ pub use storage::StorageManager;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use log::{debug, info};
 use tokio::sync::Mutex;
 
 /// サーバを起動
@@ -38,7 +39,7 @@ pub async fn run(config: ServerConfig) -> anyhow::Result<()> {
         .parse()
         .map_err(|e| anyhow::anyhow!("Invalid address: {}", e))?;
 
-    println!("Server started at http://{}", addr);
+    info!("Server started at http://{}", addr);
 
     // サーバを起動
     warp::serve(routes).run(addr).await;
@@ -48,9 +49,9 @@ pub async fn run(config: ServerConfig) -> anyhow::Result<()> {
 
 /// 起動情報を表示
 fn print_startup_info(config: &ServerConfig) {
-    println!("Starting chroma-transparent server...");
-    println!("  Address: http://{}:{}", config.host, config.port);
-    println!(
+    info!("Starting chroma-transparent server...");
+    info!("  Address: http://{}:{}", config.host, config.port);
+    info!(
         "  Storage: {}",
         match &config.storage_dir {
             Some(dir) => format!("{} (persistent)", dir.display()),
@@ -62,29 +63,27 @@ fn print_startup_info(config: &ServerConfig) {
     #[cfg(feature = "video")]
     {
         if config.video_enabled {
-            println!("  Video processing: enabled");
+            info!("  Video processing: enabled");
         } else {
-            println!("  Video processing: disabled (use --enable-video to enable)");
+            debug!("  Video processing: disabled (use --enable-video to enable)");
         }
     }
     #[cfg(not(feature = "video"))]
     {
-        println!("  Video processing: not available (rebuild with --features video)");
+        debug!("  Video processing: not available (rebuild with --features video)");
     }
 
-    println!();
-    println!(
+    info!(
         "  Web UI: http://{}:{}",
         config.host, config.port
     );
-    println!(
+    info!(
         "  API docs: http://{}:{}/api/docs",
         config.host, config.port
     );
-    println!(
+    debug!(
         "  OpenAPI spec: http://{}:{}/api/openapi.json",
         config.host, config.port
     );
-    println!();
 }
 

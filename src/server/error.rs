@@ -1,5 +1,6 @@
 //! APIエラー定義
 
+use log::{error, warn};
 use serde::Serialize;
 use std::convert::Infallible;
 use warp::http::StatusCode;
@@ -40,12 +41,12 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
             ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, "not_found", msg.as_str()),
             ApiError::ProcessingError(msg) => {
                 // 500エラー時はサーバーログに詳細を出力
-                eprintln!("[ERROR] Processing error: {}", msg);
+                error!("Processing error: {}", msg);
                 (StatusCode::INTERNAL_SERVER_ERROR, "processing_error", msg.as_str())
             }
             ApiError::InternalError(msg) => {
                 // 500エラー時はサーバーログに詳細を出力
-                eprintln!("[ERROR] Internal error: {}", msg);
+                error!("Internal error: {}", msg);
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal_error", msg.as_str())
             }
             ApiError::NotImplemented(msg) => {
@@ -65,7 +66,7 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
             "Method not allowed",
         )
     } else {
-        eprintln!("Unhandled rejection: {:?}", err);
+        warn!("Unhandled rejection: {:?}", err);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "internal_error",

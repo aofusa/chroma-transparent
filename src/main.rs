@@ -11,10 +11,36 @@ static GLOBAL: MiMalloc = MiMalloc;
 use std::path::Path;
 
 use clap::Parser;
+use log::{debug, info, warn};
 
 use chroma_transparent::{
     ensure_output_directory, Args, ChromaError, ChromaPipeline, ImageScanner, ProcessConfig,
 };
+
+/// ログを初期化
+fn init_logger(verbose: u8, quiet: bool) {
+    // 環境変数 RUST_LOG が設定されている場合はそちらを優先
+    if std::env::var("RUST_LOG").is_ok() {
+        env_logger::init();
+        return;
+    }
+
+    // コマンドライン引数からログレベルを決定
+    let level = if quiet {
+        log::LevelFilter::Error
+    } else {
+        match verbose {
+            0 => log::LevelFilter::Info,
+            1 => log::LevelFilter::Debug,
+            _ => log::LevelFilter::Trace,
+        }
+    };
+
+    env_logger::Builder::new()
+        .filter_level(level)
+        .format_timestamp_secs()
+        .init();
+}
 
 #[cfg(feature = "video")]
 use chroma_transparent::{
@@ -26,6 +52,9 @@ use chroma_transparent::{
 fn main() -> anyhow::Result<()> {
     // CLI引数をパース
     let args = Args::parse();
+
+    // ログを初期化
+    init_logger(args.verbose, args.quiet);
 
     // サーバモードの場合
     if args.is_server_mode() {
@@ -45,6 +74,10 @@ fn main() -> anyhow::Result<()> {
 #[cfg(not(feature = "server"))]
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+
+    // ログを初期化
+    init_logger(args.verbose, args.quiet);
+
     run_cli(args)
 }
 
@@ -92,11 +125,9 @@ fn process_single_image(args: &Args, config: &ProcessConfig) -> anyhow::Result<(
     let input_path = args.input_path()?;
     let output_path = args.output_path_for_file(input_path);
 
-    if config.verbose {
-        eprintln!("Input: {:?}", input_path);
-        eprintln!("Output: {:?}", output_path);
-        eprintln!("Config: {:?}", config);
-    }
+    debug!("Input: {:?}", input_path);
+    debug!("Output: {:?}", output_path);
+    debug!("Config: {:?}", config);
 
     // 出力ディレクトリを作成
     ensure_output_directory(&output_path)?;
@@ -109,9 +140,7 @@ fn process_single_image(args: &Args, config: &ProcessConfig) -> anyhow::Result<(
         })?
         .to_rgba8();
 
-    if config.verbose {
-        eprintln!("Image size: {}x{}", image.width(), image.height());
-    }
+    debug!("Image size: {}x{}", image.width(), image.height());
 
     // パイプラインで処理
     let pipeline = ChromaPipeline::new(config.clone());
@@ -125,7 +154,7 @@ fn process_single_image(args: &Args, config: &ProcessConfig) -> anyhow::Result<(
             source: e,
         })?;
 
-    println!("Saved: {}", output_path.display());
+    info!("Saved: {}", output_path.display());
     Ok(())
 }
 
@@ -158,16 +187,14 @@ fn process_video(args: &Args, config: &ProcessConfig) -> anyhow::Result<()> {
         generate_video_output_path(input_path, video_format)
     };
 
-    if config.verbose {
-        eprintln!("Input video: {:?}", input_path);
-        eprintln!("Output: {:?}", output_path);
-        eprintln!("Format: {}", video_format);
-        eprintln!("Quality: {}", args.video_quality);
-        if let Some(fps) = args.fps {
-            eprintln!("FPS: {}", fps);
-        }
-        eprintln!("Config: {:?}", config);
+    debug!("Input video: {:?}", input_path);
+    debug!("Output: {:?}", output_path);
+    debug!("Format: {}", video_format);
+    debug!("Quality: {}", args.video_quality);
+    if let Some(fps) = args.fps {
+        debug!("FPS: {}", fps);
     }
+    debug!("Config: {:?}", config);
 
     // 出力ディレクトリを作成
     ensure_output_directory(&output_path)?;
@@ -183,10 +210,8 @@ fn process_video(args: &Args, config: &ProcessConfig) -> anyhow::Result<()> {
         );
     }
 
-    if config.verbose {
-        if let Ok(version) = ffmpeg.version() {
-            eprintln!("Using: {}", version);
-        }
+    if let Ok(version) = ffmpeg.version() {
+        debug!("Using: {}", version);
     }
 
     // クロマキーパイプラインを作成
@@ -204,7 +229,7 @@ fn process_video(args: &Args, config: &ProcessConfig) -> anyhow::Result<()> {
     let processor = VideoProcessor::new(ffmpeg, chroma_pipeline, video_config);
     processor.process(input_path, &output_path)?;
 
-    println!("Saved: {}", output_path.display());
+    info!("Saved: {}", output_path.display());
     Ok(())
 }
 
@@ -212,25 +237,23 @@ fn process_video(args: &Args, config: &ProcessConfig) -> anyhow::Result<()> {
 fn process_directory(args: &Args, config: &ProcessConfig) -> anyhow::Result<()> {
     let input_dir = args.input_path()?;
 
-    if config.verbose {
-        eprintln!("Input directory: {:?}", input_dir);
-        if let Some(output) = &args.output {
-            eprintln!("Output directory: {:?}", output);
-        }
-        eprintln!("Recursive depth: {:?}", args.recursive);
-        eprintln!("Config: {:?}", config);
+    debug!("Input directory: {:?}", input_dir);
+    if let Some(output) = &args.output {
+        debug!("Output directory: {:?}", output);
     }
+    debug!("Recursive depth: {:?}", args.recursive);
+    debug!("Config: {:?}", config);
 
     // 画像ファイルを探索
     let scanner = ImageScanner::new(args.recursive);
     let files = scanner.scan(input_dir);
 
     if files.is_empty() {
-        println!("No image files found in {:?}", input_dir);
+        warn!("No image files found in {:?}", input_dir);
         return Ok(());
     }
 
-    println!("Found {} image file(s)", files.len());
+    info!("Found {} image file(s)", files.len());
 
     // パイプラインを作成
     let pipeline = ChromaPipeline::new(config.clone());
@@ -242,13 +265,11 @@ fn process_directory(args: &Args, config: &ProcessConfig) -> anyhow::Result<()> 
     for input_path in &files {
         let output_path = args.output_path_for_dir_entry(input_path, input_dir);
 
-        if config.verbose {
-            eprintln!("Processing: {:?} -> {:?}", input_path, output_path);
-        }
+        debug!("Processing: {:?} -> {:?}", input_path, output_path);
 
         // 出力ディレクトリを作成
         if let Err(e) = ensure_output_directory(&output_path) {
-            eprintln!("Error creating directory for {:?}: {}", output_path, e);
+            log::error!("Error creating directory for {:?}: {}", output_path, e);
             error_count += 1;
             continue;
         }
@@ -256,19 +277,18 @@ fn process_directory(args: &Args, config: &ProcessConfig) -> anyhow::Result<()> 
         // 画像を処理
         match process_file(&pipeline, input_path, &output_path) {
             Ok(()) => {
-                println!("Saved: {}", output_path.display());
+                info!("Saved: {}", output_path.display());
                 success_count += 1;
             }
             Err(e) => {
-                eprintln!("Error processing {:?}: {}", input_path, e);
+                log::error!("Error processing {:?}: {}", input_path, e);
                 error_count += 1;
             }
         }
     }
 
     // サマリーを出力
-    println!();
-    println!("Completed: {} succeeded, {} failed", success_count, error_count);
+    info!("Completed: {} succeeded, {} failed", success_count, error_count);
 
     Ok(())
 }

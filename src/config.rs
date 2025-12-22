@@ -105,7 +105,8 @@ impl ProcessConfig {
             despill_strength: args.despill,
             erode_iterations: args.erode,
             dilate_iterations: args.dilate,
-            verbose: args.verbose,
+            // verbose フラグは後方互換性のために維持（ログ出力は log クレートで制御）
+            verbose: args.verbose > 0,
         })
     }
 }

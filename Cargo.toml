@@ -29,6 +29,8 @@ image = "0.25"
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 thiserror = "1"
+log = "0.4"
+env_logger = "0.11"
 
 # 動画機能用の依存関係 (feature = "video")
 tempfile = { version = "3", optional = true }

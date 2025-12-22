@@ -1,6 +1,10 @@
-//! フェザリング（ガウシアンブラー）
+//! フェザリング（ガウシアンブラー）（最適化版）
+//!
+//! 改善案A: Rayon並列処理
+//! 改善案D: バッファ直接操作
 
 use image::GrayImage;
+use rayon::prelude::*;
 
 /// ガウシアンブラーでアルファチャンネルをフェザリング
 /// エッジを滑らかにしてギザギザを防ぐ
@@ -20,59 +24,71 @@ pub fn feather_alpha(alpha: &GrayImage, amount: u32) -> GrayImage {
     gaussian_blur(alpha, kernel_size, sigma)
 }
 
-/// ガウシアンブラー（高品質）
+/// ガウシアンブラー（分離カーネル + 並列処理）
+///
+/// 改善案A: 行/列ごとの並列処理
+/// 改善案D: バッファ直接操作
 fn gaussian_blur(image: &GrayImage, kernel_size: u32, sigma: f32) -> GrayImage {
     // ガウシアンカーネルを生成
     let kernel = generate_gaussian_kernel(kernel_size, sigma);
     let radius = (kernel_size / 2) as i32;
 
     let (width, height) = image.dimensions();
+    let w = width as usize;
+    let h = height as usize;
+    let src = image.as_raw();
 
-    // 水平方向のブラー
-    let mut horizontal = GrayImage::new(width, height);
-    for y in 0..height {
-        for x in 0..width {
-            let mut sum = 0.0f32;
-            let mut weight_sum = 0.0f32;
+    // 水平方向のブラー（並列処理）
+    let horizontal: Vec<u8> = (0..h)
+        .into_par_iter()
+        .flat_map(|y| {
+            let mut row = Vec::with_capacity(w);
+            for x in 0..w {
+                let mut sum = 0.0f32;
+                let mut weight_sum = 0.0f32;
 
-            for i in -radius..=radius {
-                let nx = x as i32 + i;
-                if nx >= 0 && nx < width as i32 {
-                    let val = image.get_pixel(nx as u32, y).0[0] as f32;
-                    let weight = kernel[(i + radius) as usize];
-                    sum += val * weight;
-                    weight_sum += weight;
+                for i in -radius..=radius {
+                    let nx = x as i32 + i;
+                    if nx >= 0 && nx < w as i32 {
+                        let val = src[y * w + nx as usize] as f32;
+                        let weight = kernel[(i + radius) as usize];
+                        sum += val * weight;
+                        weight_sum += weight;
+                    }
                 }
+
+                row.push((sum / weight_sum).round() as u8);
             }
+            row
+        })
+        .collect();
 
-            let result = (sum / weight_sum).round() as u8;
-            horizontal.put_pixel(x, y, image::Luma([result]));
-        }
-    }
+    // 垂直方向のブラー（並列処理）
+    let result: Vec<u8> = (0..h)
+        .into_par_iter()
+        .flat_map(|y| {
+            let mut row = Vec::with_capacity(w);
+            for x in 0..w {
+                let mut sum = 0.0f32;
+                let mut weight_sum = 0.0f32;
 
-    // 垂直方向のブラー
-    let mut result = GrayImage::new(width, height);
-    for y in 0..height {
-        for x in 0..width {
-            let mut sum = 0.0f32;
-            let mut weight_sum = 0.0f32;
-
-            for i in -radius..=radius {
-                let ny = y as i32 + i;
-                if ny >= 0 && ny < height as i32 {
-                    let val = horizontal.get_pixel(x, ny as u32).0[0] as f32;
-                    let weight = kernel[(i + radius) as usize];
-                    sum += val * weight;
-                    weight_sum += weight;
+                for i in -radius..=radius {
+                    let ny = y as i32 + i;
+                    if ny >= 0 && ny < h as i32 {
+                        let val = horizontal[ny as usize * w + x] as f32;
+                        let weight = kernel[(i + radius) as usize];
+                        sum += val * weight;
+                        weight_sum += weight;
+                    }
                 }
+
+                row.push((sum / weight_sum).round() as u8);
             }
+            row
+        })
+        .collect();
 
-            let result_val = (sum / weight_sum).round() as u8;
-            result.put_pixel(x, y, image::Luma([result_val]));
-        }
-    }
-
-    result
+    GrayImage::from_raw(width, height, result).expect("Failed to create image")
 }
 
 /// 1次元ガウシアンカーネルを生成
@@ -141,5 +157,21 @@ mod tests {
         assert!(kernel[2] > kernel[1]);
         assert!(kernel[2] > kernel[3]);
     }
-}
 
+    #[test]
+    fn test_large_image() {
+        // 並列処理のテスト用大きな画像
+        let alpha = GrayImage::from_fn(500, 500, |x, _| {
+            if x < 250 {
+                image::Luma([255])
+            } else {
+                image::Luma([0])
+            }
+        });
+
+        let feathered = feather_alpha(&alpha, 5);
+        // 境界付近がぼかされている
+        let edge = feathered.get_pixel(250, 250).0[0];
+        assert!(edge > 0 && edge < 255);
+    }
+}

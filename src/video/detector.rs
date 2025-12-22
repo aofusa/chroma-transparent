@@ -73,6 +73,7 @@ pub fn is_image_file(path: &Path) -> bool {
 }
 
 /// 拡張子から動画かどうかを判定（存在確認なし）
+#[allow(dead_code)]
 pub fn is_video_extension(path: &Path) -> bool {
     matches!(detect_by_extension(path), FileType::Video)
 }

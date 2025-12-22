@@ -1,35 +1,66 @@
-//! アルファチャンネル処理
+//! アルファチャンネル処理（最適化版）
+//!
+//! 改善案A: Rayon並列処理
+//! 改善案D: バッファ直接操作
+//! 改善案E: SIMD最適化
 
 use image::{GrayImage, RgbaImage};
+use rayon::prelude::*;
 
-/// マスクからアルファチャンネルを生成（反転）
-/// マスクの白(255)→透明(0)、黒(0)→不透明(255)
+use super::simd;
+
+/// マスクからアルファチャンネルを生成
+///
+/// マスク（白=クロマキー対象）を反転してアルファチャンネルに変換
+///
+/// 改善案E: SIMD最適化で高速化
 pub fn create_alpha_from_mask(mask: &GrayImage) -> GrayImage {
     let (width, height) = mask.dimensions();
-    let mut alpha = GrayImage::new(width, height);
+    let src = mask.as_raw();
+    let mut dst = vec![0u8; src.len()];
 
-    for (x, y, pixel) in mask.enumerate_pixels() {
-        // 反転: 255 - value
-        let alpha_value = 255 - pixel.0[0];
-        alpha.put_pixel(x, y, image::Luma([alpha_value]));
-    }
+    // SIMDで反転（改善案E）
+    simd::invert_mask_simd(src, &mut dst);
 
-    alpha
+    GrayImage::from_raw(width, height, dst).expect("Failed to create alpha channel")
 }
 
-/// 画像にアルファチャンネルを適用
-pub fn apply_alpha(image: &mut RgbaImage, alpha: &GrayImage) {
-    let (width, height) = image.dimensions();
+/// アルファチャンネルを画像に適用
+///
+/// 改善案A: 並列処理
+/// 改善案D: バッファ直接操作
+/// 改善案E: SIMD最適化
+pub fn apply_alpha(image: &RgbaImage, alpha: &GrayImage) -> RgbaImage {
+    let mut result = image.clone();
 
-    for y in 0..height {
-        for x in 0..width {
-            if x < alpha.width() && y < alpha.height() {
-                let alpha_value = alpha.get_pixel(x, y).0[0];
-                let pixel = image.get_pixel_mut(x, y);
-                pixel.0[3] = alpha_value;
-            }
-        }
-    }
+    // SIMDでアルファ適用（改善案E）
+    simd::apply_alpha_simd(result.as_mut(), alpha.as_raw());
+
+    result
+}
+
+/// アルファチャンネルを画像にインプレース適用
+///
+/// 改善案G: インプレース処理
+pub fn apply_alpha_inplace(image: &mut RgbaImage, alpha: &GrayImage) {
+    // SIMDでアルファ適用（改善案E）
+    simd::apply_alpha_simd(image.as_mut(), alpha.as_raw());
+}
+
+/// マスクからアルファチャンネルを生成（並列版）
+///
+/// 改善案A: Rayon並列処理
+pub fn create_alpha_from_mask_parallel(mask: &GrayImage) -> GrayImage {
+    let (width, height) = mask.dimensions();
+    let w = width as usize;
+
+    let result: Vec<u8> = mask
+        .as_raw()
+        .par_chunks(w)
+        .flat_map(|row| row.iter().map(|&m| 255 - m).collect::<Vec<u8>>())
+        .collect();
+
+    GrayImage::from_raw(width, height, result).expect("Failed to create alpha channel")
 }
 
 #[cfg(test)]
@@ -41,10 +72,11 @@ mod tests {
     fn test_create_alpha_from_mask() {
         let mut mask = GrayImage::new(2, 1);
         mask.put_pixel(0, 0, image::Luma([255])); // クロマキー対象
-        mask.put_pixel(1, 0, image::Luma([0])); // 保持対象
+        mask.put_pixel(1, 0, image::Luma([0])); // 保持
 
         let alpha = create_alpha_from_mask(&mask);
 
+        // 反転される
         assert_eq!(alpha.get_pixel(0, 0).0[0], 0); // 透明
         assert_eq!(alpha.get_pixel(1, 0).0[0], 255); // 不透明
     }
@@ -59,10 +91,45 @@ mod tests {
         alpha.put_pixel(0, 0, image::Luma([128]));
         alpha.put_pixel(1, 0, image::Luma([255]));
 
-        apply_alpha(&mut image, &alpha);
+        let result = apply_alpha(&image, &alpha);
+
+        assert_eq!(result.get_pixel(0, 0).0[3], 128);
+        assert_eq!(result.get_pixel(1, 0).0[3], 255);
+    }
+
+    #[test]
+    fn test_apply_alpha_inplace() {
+        let mut image = RgbaImage::new(2, 1);
+        image.put_pixel(0, 0, Rgba([255, 0, 0, 255]));
+        image.put_pixel(1, 0, Rgba([0, 255, 0, 255]));
+
+        let mut alpha = GrayImage::new(2, 1);
+        alpha.put_pixel(0, 0, image::Luma([128]));
+        alpha.put_pixel(1, 0, image::Luma([255]));
+
+        apply_alpha_inplace(&mut image, &alpha);
 
         assert_eq!(image.get_pixel(0, 0).0[3], 128);
         assert_eq!(image.get_pixel(1, 0).0[3], 255);
     }
-}
 
+    #[test]
+    fn test_large_image() {
+        // 並列処理とSIMDのテスト用大きな画像
+        let image = RgbaImage::from_fn(1000, 1000, |_, _| Rgba([255, 0, 0, 255]));
+
+        let alpha = GrayImage::from_fn(1000, 1000, |x, _| {
+            if x < 500 {
+                image::Luma([0])
+            } else {
+                image::Luma([255])
+            }
+        });
+
+        let result = apply_alpha(&image, &alpha);
+
+        // 左半分は透明、右半分は不透明
+        assert_eq!(result.get_pixel(0, 0).0[3], 0);
+        assert_eq!(result.get_pixel(999, 0).0[3], 255);
+    }
+}

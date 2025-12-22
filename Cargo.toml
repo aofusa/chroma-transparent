@@ -31,6 +31,7 @@ anyhow = "1"
 thiserror = "1"
 log = "0.4"
 env_logger = "0.11"
+rayon = "1.10"
 
 # 動画機能用の依存関係 (feature = "video")
 tempfile = { version = "3", optional = true }

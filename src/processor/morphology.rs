@@ -1,87 +1,134 @@
-//! モルフォロジー演算
+//! モルフォロジー演算（最適化版）
+//!
+//! 改善案A: Rayon並列処理
+//! 改善案C: ダブルバッファリング（メモリ効率改善）
+//! 改善案D: バッファ直接操作
 
 use image::GrayImage;
+use rayon::prelude::*;
 
 /// 3x3カーネルでの収縮処理
 /// ノイズ除去に使用
+///
+/// 改善案C: ダブルバッファリングで不要なメモリ割り当てを削減
 pub fn erode(mask: &GrayImage, iterations: u32) -> GrayImage {
-    let mut result = mask.clone();
-
-    for _ in 0..iterations {
-        result = erode_once(&result);
+    if iterations == 0 {
+        return mask.clone();
     }
 
-    result
+    let (width, height) = mask.dimensions();
+
+    // ダブルバッファリング（改善案C）
+    let mut buf_a = mask.as_raw().clone();
+    let mut buf_b = vec![0u8; (width * height) as usize];
+
+    for i in 0..iterations {
+        if i % 2 == 0 {
+            erode_into(&buf_a, &mut buf_b, width, height);
+        } else {
+            erode_into(&buf_b, &mut buf_a, width, height);
+        }
+    }
+
+    let final_data = if iterations % 2 == 0 { buf_a } else { buf_b };
+    GrayImage::from_raw(width, height, final_data).expect("Failed to create image")
 }
 
 /// 3x3カーネルでの膨張処理
 /// エッジ拡張に使用
+///
+/// 改善案C: ダブルバッファリングで不要なメモリ割り当てを削減
 pub fn dilate(mask: &GrayImage, iterations: u32) -> GrayImage {
-    let mut result = mask.clone();
-
-    for _ in 0..iterations {
-        result = dilate_once(&result);
+    if iterations == 0 {
+        return mask.clone();
     }
 
-    result
+    let (width, height) = mask.dimensions();
+
+    // ダブルバッファリング（改善案C）
+    let mut buf_a = mask.as_raw().clone();
+    let mut buf_b = vec![0u8; (width * height) as usize];
+
+    for i in 0..iterations {
+        if i % 2 == 0 {
+            dilate_into(&buf_a, &mut buf_b, width, height);
+        } else {
+            dilate_into(&buf_b, &mut buf_a, width, height);
+        }
+    }
+
+    let final_data = if iterations % 2 == 0 { buf_a } else { buf_b };
+    GrayImage::from_raw(width, height, final_data).expect("Failed to create image")
 }
 
-/// 1回の収縮処理
-fn erode_once(mask: &GrayImage) -> GrayImage {
-    let (width, height) = mask.dimensions();
-    let mut result = GrayImage::new(width, height);
+/// 1回の収縮処理（改善案A: 並列化、改善案D: バッファ直接操作）
+fn erode_into(src: &[u8], dst: &mut [u8], width: u32, height: u32) {
+    let w = width as usize;
+    let h = height as usize;
 
-    for y in 0..height {
-        for x in 0..width {
-            // 3x3カーネル内の最小値を取得
-            let mut min_val = 255u8;
+    // 並列処理（改善案A）
+    dst.par_chunks_mut(w)
+        .enumerate()
+        .for_each(|(y, row)| {
+            for x in 0..w {
+                // 3x3カーネル内の最小値を取得
+                let mut min_val = 255u8;
 
-            for dy in -1i32..=1 {
-                for dx in -1i32..=1 {
-                    let nx = x as i32 + dx;
-                    let ny = y as i32 + dy;
+                for dy in 0..3 {
+                    let ny = y.saturating_add(dy).saturating_sub(1);
+                    if ny >= h {
+                        continue;
+                    }
 
-                    if nx >= 0 && nx < width as i32 && ny >= 0 && ny < height as i32 {
-                        let val = mask.get_pixel(nx as u32, ny as u32).0[0];
+                    for dx in 0..3 {
+                        let nx = x.saturating_add(dx).saturating_sub(1);
+                        if nx >= w {
+                            continue;
+                        }
+
+                        let val = src[ny * w + nx];
                         min_val = min_val.min(val);
                     }
                 }
+
+                row[x] = min_val;
             }
-
-            result.put_pixel(x, y, image::Luma([min_val]));
-        }
-    }
-
-    result
+        });
 }
 
-/// 1回の膨張処理
-fn dilate_once(mask: &GrayImage) -> GrayImage {
-    let (width, height) = mask.dimensions();
-    let mut result = GrayImage::new(width, height);
+/// 1回の膨張処理（改善案A: 並列化、改善案D: バッファ直接操作）
+fn dilate_into(src: &[u8], dst: &mut [u8], width: u32, height: u32) {
+    let w = width as usize;
+    let h = height as usize;
 
-    for y in 0..height {
-        for x in 0..width {
-            // 3x3カーネル内の最大値を取得
-            let mut max_val = 0u8;
+    // 並列処理（改善案A）
+    dst.par_chunks_mut(w)
+        .enumerate()
+        .for_each(|(y, row)| {
+            for x in 0..w {
+                // 3x3カーネル内の最大値を取得
+                let mut max_val = 0u8;
 
-            for dy in -1i32..=1 {
-                for dx in -1i32..=1 {
-                    let nx = x as i32 + dx;
-                    let ny = y as i32 + dy;
+                for dy in 0..3 {
+                    let ny = y.saturating_add(dy).saturating_sub(1);
+                    if ny >= h {
+                        continue;
+                    }
 
-                    if nx >= 0 && nx < width as i32 && ny >= 0 && ny < height as i32 {
-                        let val = mask.get_pixel(nx as u32, ny as u32).0[0];
+                    for dx in 0..3 {
+                        let nx = x.saturating_add(dx).saturating_sub(1);
+                        if nx >= w {
+                            continue;
+                        }
+
+                        let val = src[ny * w + nx];
                         max_val = max_val.max(val);
                     }
                 }
+
+                row[x] = max_val;
             }
-
-            result.put_pixel(x, y, image::Luma([max_val]));
-        }
-    }
-
-    result
+        });
 }
 
 #[cfg(test)]
@@ -126,5 +173,33 @@ mod tests {
         assert_eq!(dilated.get_pixel(1, 3).0[0], 255);
         assert_eq!(dilated.get_pixel(5, 3).0[0], 255);
     }
-}
 
+    #[test]
+    fn test_zero_iterations() {
+        let mut mask = GrayImage::new(5, 5);
+        mask.put_pixel(2, 2, image::Luma([255]));
+
+        // 0回ならそのまま
+        let result = erode(&mask, 0);
+        assert_eq!(result.get_pixel(2, 2).0[0], 255);
+
+        let result = dilate(&mask, 0);
+        assert_eq!(result.get_pixel(2, 2).0[0], 255);
+    }
+
+    #[test]
+    fn test_large_image() {
+        // 並列処理のテスト用大きな画像
+        let mask = GrayImage::from_fn(1000, 1000, |x, _| {
+            if x < 500 {
+                image::Luma([255])
+            } else {
+                image::Luma([0])
+            }
+        });
+
+        let dilated = dilate(&mask, 1);
+        // 膨張により境界が広がる
+        assert_eq!(dilated.get_pixel(500, 500).0[0], 255);
+    }
+}

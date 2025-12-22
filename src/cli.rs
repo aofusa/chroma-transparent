@@ -11,21 +11,21 @@ use crate::error::{ChromaError, Result};
 #[command(version)]
 #[command(about = "指定した色をクロマキー処理して透過PNGに変換")]
 #[command(long_about = r#"
-指定した画像の指定された色をクロマキー処理して透過PNGに変換するCLIツールです。
+指定した画像または動画の指定された色をクロマキー処理して透過ファイルに変換するCLIツールです。
 
-グリーンバック画像やブルーバック画像など、単色背景の画像から
-被写体を切り抜いて透過PNGを生成できます。
+グリーンバック画像/動画やブルーバック画像/動画など、単色背景から
+被写体を切り抜いて透過PNG/WebMを生成できます。
 
 ファイルまたはディレクトリを入力として指定できます。
-ディレクトリを指定した場合、そのディレクトリ内のすべての画像ファイルを処理します。
+動画ファイルの場合はffmpegが必要です。
 
 色の指定にはHEXコード（00FF00）またはCSS色名（lime, green, blue等）が使用できます。
 
 例:
   chroma-transparent photo.png
   chroma-transparent photo.png -o result.png -c lime
-  chroma-transparent photo.png -c blue -t 0.4 -f 10 -d 0.9
-  chroma-transparent ./input_dir -o ./output_dir
+  chroma-transparent video.mp4 -o output.webm
+  chroma-transparent video.mp4 --video-format mov -o output.mov
   chroma-transparent ./input_dir -o ./output_dir -r 2
 "#)]
 pub struct Args {
@@ -65,6 +65,22 @@ pub struct Args {
     /// このオプションを指定しない場合、ディレクトリ直下のファイルのみ処理します
     #[arg(short, long, value_name = "DEPTH")]
     pub recursive: Option<u32>,
+
+    /// 動画出力フォーマット [webm, mov, png-sequence]
+    #[arg(long, value_name = "FORMAT")]
+    pub video_format: Option<String>,
+
+    /// 動画出力品質 (1-100)
+    #[arg(long, default_value = "80", value_name = "QUALITY")]
+    pub video_quality: u32,
+
+    /// 動画出力フレームレート（省略時は入力と同じ）
+    #[arg(long, value_name = "FPS")]
+    pub fps: Option<f32>,
+
+    /// ffmpegのパス
+    #[arg(long, default_value = "ffmpeg", value_name = "PATH")]
+    pub ffmpeg: PathBuf,
 
     /// 詳細ログを出力
     #[arg(short, long)]
@@ -168,9 +184,8 @@ impl Args {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_output_path_default() {
-        let args = Args {
+    fn create_test_args() -> Args {
+        Args {
             input: PathBuf::from("/path/to/image.png"),
             output: None,
             color: "00FF00".to_string(),
@@ -180,8 +195,17 @@ mod tests {
             erode: 0,
             dilate: 1,
             recursive: None,
+            video_format: None,
+            video_quality: 80,
+            fps: None,
+            ffmpeg: PathBuf::from("ffmpeg"),
             verbose: false,
-        };
+        }
+    }
+
+    #[test]
+    fn test_output_path_default() {
+        let args = create_test_args();
         assert_eq!(
             args.output_path(),
             PathBuf::from("/path/to/image.chroma.png")
@@ -190,35 +214,17 @@ mod tests {
 
     #[test]
     fn test_output_path_specified() {
-        let args = Args {
-            input: PathBuf::from("/path/to/image.png"),
-            output: Some(PathBuf::from("/other/output.png")),
-            color: "00FF00".to_string(),
-            tolerance: 0.3,
-            feather: 5,
-            despill: 0.7,
-            erode: 0,
-            dilate: 1,
-            recursive: None,
-            verbose: false,
-        };
+        let mut args = create_test_args();
+        args.output = Some(PathBuf::from("/other/output.png"));
         assert_eq!(args.output_path(), PathBuf::from("/other/output.png"));
     }
 
     #[test]
     fn test_output_path_for_dir_entry() {
-        let args = Args {
-            input: PathBuf::from("/input"),
-            output: Some(PathBuf::from("/output")),
-            color: "00FF00".to_string(),
-            tolerance: 0.3,
-            feather: 5,
-            despill: 0.7,
-            erode: 0,
-            dilate: 1,
-            recursive: Some(0),
-            verbose: false,
-        };
+        let mut args = create_test_args();
+        args.input = PathBuf::from("/input");
+        args.output = Some(PathBuf::from("/output"));
+        args.recursive = Some(0);
 
         // サブディレクトリ内のファイル
         let input_file = Path::new("/input/subdir/image.png");

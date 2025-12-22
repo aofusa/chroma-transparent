@@ -3,9 +3,9 @@
 ![Rust](https://img.shields.io/badge/rust-1.70%2B-orange)
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue)
 
-指定した画像の指定された色をクロマキー処理して透過PNGに変換するCLIツールです。
+指定した画像・動画の指定された色をクロマキー処理して透過ファイルに変換するCLIツールです。
 
-グリーンバック画像やブルーバック画像など、単色背景の画像から被写体を切り抜いて透過PNGを生成できます。
+グリーンバック画像/動画やブルーバック画像/動画など、単色背景から被写体を切り抜いて透過PNG/WebMを生成できます。
 
 ## 機能
 
@@ -18,6 +18,7 @@
 - **柔軟なパラメータ調整**: すべての処理パラメータをコマンドラインから調整可能
 - **ディレクトリ一括処理**: ディレクトリ内の全画像ファイルを一括処理
 - **再帰的探索**: サブディレクトリも含めて処理（深さ指定可能）
+- **動画対応**: ffmpegを使用してMP4, WebM, MOV等の動画を透過動画（WebM/MOV）に変換
 
 ## インストール
 
@@ -74,6 +75,33 @@ chroma-transparent ./input_dir -o ./output_dir -r 0
 chroma-transparent input.png -o ./output_dir/
 ```
 
+### 動画の処理
+
+動画ファイルを処理する場合は、システムにffmpegがインストールされている必要があります。
+
+```bash
+# 動画を透過WebMに変換（デフォルト）
+chroma-transparent video.mp4
+
+# 出力ファイルを指定
+chroma-transparent video.mp4 -o output.webm
+
+# ProRes 4444 MOV形式で出力（高品質、プロ用途）
+chroma-transparent video.mp4 --video-format mov -o output.mov
+
+# PNG連番で出力
+chroma-transparent video.mp4 --video-format png-sequence -o ./frames/
+
+# 品質とフレームレートを指定
+chroma-transparent video.mp4 --video-quality 90 --fps 30
+
+# ffmpegのパスを指定
+chroma-transparent video.mp4 --ffmpeg /usr/local/bin/ffmpeg
+
+# 詳細ログを表示
+chroma-transparent video.mp4 -o output.webm -v
+```
+
 ### 詳細なパラメータ調整
 
 ```bash
@@ -105,8 +133,8 @@ chroma-transparent input.png \
 
 | オプション | 短縮形 | 説明 | デフォルト値 | 範囲 |
 |-----------|-------|------|-------------|------|
-| `<INPUT>` | - | 入力画像またはディレクトリのパス（必須） | - | - |
-| `--output` | `-o` | 出力ファイルまたはディレクトリのパス | `<入力ファイル名>.chroma.png` | - |
+| `<INPUT>` | - | 入力画像・動画またはディレクトリのパス（必須） | - | - |
+| `--output` | `-o` | 出力ファイルまたはディレクトリのパス | `<入力ファイル名>.chroma.png/webm` | - |
 | `--color` | `-c` | クロマキー処理する色（HEXコードまたはCSS色名） | `lime`（緑） | CSS色名 or RRGGBB |
 | `--tolerance` | `-t` | 色の許容範囲 | `0.3` | 0.0 - 1.0 |
 | `--feather` | `-f` | フェザリング量 | `5` | 0 - 50 |
@@ -114,6 +142,10 @@ chroma-transparent input.png \
 | `--erode` | `-e` | 収縮回数 | `0` | 0 - 10 |
 | `--dilate` | `-D` | 膨張回数 | `1` | 0 - 10 |
 | `--recursive` | `-r` | 再帰的探索の深さ (0 = 無制限) | なし (直下のみ) | 0 - ∞ |
+| `--video-format` | - | 動画出力フォーマット | `webm` | webm, mov, png-sequence |
+| `--video-quality` | - | 動画出力品質 | `80` | 1 - 100 |
+| `--fps` | - | 動画出力フレームレート | 入力と同じ | - |
+| `--ffmpeg` | - | ffmpegのパス | `ffmpeg` | - |
 | `--verbose` | `-v` | 詳細ログを出力 | `false` | - |
 | `--help` | `-h` | ヘルプを表示 | - | - |
 | `--version` | `-V` | バージョンを表示 | - | - |
@@ -255,9 +287,9 @@ fn main() -> anyhow::Result<()> {
 }
 ```
 
-## 対応画像フォーマット
+## 対応フォーマット
 
-### 入力
+### 画像入力
 
 - PNG
 - JPEG
@@ -267,13 +299,31 @@ fn main() -> anyhow::Result<()> {
 - TIFF
 - その他 `image` クレートがサポートするフォーマット
 
-### 出力
+### 画像出力
 
 - PNG（アルファチャンネル付き）
+
+### 動画入力
+
+- MP4
+- WebM
+- MOV
+- AVI
+- MKV
+- その他 ffmpeg がサポートするフォーマット
+
+### 動画出力
+
+| フォーマット | 説明 | 用途 |
+|-------------|------|-----|
+| WebM (VP9) | アルファチャンネル付き動画 | Web, 一般用途 |
+| MOV (ProRes 4444) | 高品質アルファ動画 | プロ向け編集ソフト |
+| PNG連番 | 各フレームをPNGファイルとして出力 | 後処理、編集 |
 
 ## 動作要件
 
 - Rust 1.70 以上
+- 動画処理を使用する場合: ffmpeg + ffprobe
 
 ## ライセンス
 

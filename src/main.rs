@@ -13,7 +13,9 @@ use std::path::Path;
 use clap::Parser;
 
 use chroma_transparent::{
-    ensure_output_directory, Args, ChromaError, ChromaPipeline, ImageScanner, ProcessConfig,
+    detect_file_type, ensure_output_directory, generate_video_output_path, Args, ChromaError,
+    ChromaPipeline, Ffmpeg, FileType, ImageScanner, ProcessConfig, VideoFormat,
+    VideoProcessConfig, VideoProcessor,
 };
 
 fn main() -> anyhow::Result<()> {
@@ -27,18 +29,23 @@ fn main() -> anyhow::Result<()> {
     let config = ProcessConfig::from_cli(&args)?;
     config.validate()?;
 
-    // 4. 入力がディレクトリかファイルかで処理を分岐
-    if args.is_input_directory() {
-        process_directory(&args, &config)?;
-    } else {
-        process_single_file(&args, &config)?;
+    // 4. 入力の種類を判定
+    let file_type = detect_file_type(&args.input);
+
+    match file_type {
+        FileType::Directory => process_directory(&args, &config)?,
+        FileType::Image => process_single_image(&args, &config)?,
+        FileType::Video => process_video(&args, &config)?,
+        FileType::Unknown => {
+            anyhow::bail!("Unknown file type: {:?}", args.input);
+        }
     }
 
     Ok(())
 }
 
-/// 単一ファイルを処理
-fn process_single_file(args: &Args, config: &ProcessConfig) -> anyhow::Result<()> {
+/// 単一画像ファイルを処理
+fn process_single_image(args: &Args, config: &ProcessConfig) -> anyhow::Result<()> {
     let input_path = &args.input;
     let output_path = args.output_path_for_file(input_path);
 
@@ -74,6 +81,84 @@ fn process_single_file(args: &Args, config: &ProcessConfig) -> anyhow::Result<()
             path: output_path.display().to_string(),
             source: e,
         })?;
+
+    println!("Saved: {}", output_path.display());
+    Ok(())
+}
+
+/// 動画ファイルを処理
+fn process_video(args: &Args, config: &ProcessConfig) -> anyhow::Result<()> {
+    let input_path = &args.input;
+
+    // 出力フォーマットを決定
+    let video_format = if let Some(format_str) = &args.video_format {
+        VideoFormat::from_str(format_str)
+            .ok_or_else(|| anyhow::anyhow!("Unknown video format: {}", format_str))?
+    } else {
+        // 出力ファイル名から拡張子を推測
+        if let Some(output) = &args.output {
+            match output.extension().and_then(|e| e.to_str()) {
+                Some("mov") => VideoFormat::Mov,
+                Some("webm") => VideoFormat::WebM,
+                _ => VideoFormat::WebM,
+            }
+        } else {
+            VideoFormat::WebM
+        }
+    };
+
+    // 出力パスを決定
+    let output_path = if let Some(output) = &args.output {
+        output.clone()
+    } else {
+        generate_video_output_path(input_path, video_format)
+    };
+
+    if config.verbose {
+        eprintln!("Input video: {:?}", input_path);
+        eprintln!("Output: {:?}", output_path);
+        eprintln!("Format: {}", video_format);
+        eprintln!("Quality: {}", args.video_quality);
+        if let Some(fps) = args.fps {
+            eprintln!("FPS: {}", fps);
+        }
+        eprintln!("Config: {:?}", config);
+    }
+
+    // 出力ディレクトリを作成
+    ensure_output_directory(&output_path)?;
+
+    // ffmpegラッパーを作成
+    let ffmpeg = Ffmpeg::new(&args.ffmpeg).with_verbose(config.verbose);
+
+    // ffmpegが利用可能か確認
+    if !ffmpeg.is_available() {
+        anyhow::bail!(
+            "ffmpeg not found at '{}'. Please install ffmpeg or specify the correct path with --ffmpeg",
+            args.ffmpeg.display()
+        );
+    }
+
+    if config.verbose {
+        if let Ok(version) = ffmpeg.version() {
+            eprintln!("Using: {}", version);
+        }
+    }
+
+    // クロマキーパイプラインを作成
+    let chroma_pipeline = ChromaPipeline::new(config.clone());
+
+    // 動画処理設定
+    let video_config = VideoProcessConfig {
+        format: video_format,
+        quality: args.video_quality,
+        fps: args.fps,
+        verbose: config.verbose,
+    };
+
+    // 動画処理
+    let processor = VideoProcessor::new(ffmpeg, chroma_pipeline, video_config);
+    processor.process(input_path, &output_path)?;
 
     println!("Saved: {}", output_path.display());
     Ok(())

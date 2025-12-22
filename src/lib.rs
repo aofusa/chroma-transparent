@@ -27,6 +27,7 @@ pub mod error;
 pub mod pipeline;
 pub mod processor;
 pub mod scanner;
+pub mod video;
 
 // 主要な型を再エクスポート
 pub use cli::Args;
@@ -35,4 +36,8 @@ pub use config::ProcessConfig;
 pub use error::{ChromaError, Result};
 pub use pipeline::ChromaPipeline;
 pub use scanner::{ensure_output_directory, ImageScanner};
+pub use video::{
+    detect_file_type, generate_video_output_path, FileType, Ffmpeg, VideoFormat,
+    VideoProcessConfig, VideoProcessor,
+};
 

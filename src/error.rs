@@ -6,7 +6,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum ChromaError {
     /// 画像の読み込みに失敗
-    #[error("画像の読み込みに失敗しました: {path}")]
+    #[error("Failed to load image: {path}")]
     ImageLoadError {
         path: String,
         #[source]
@@ -14,7 +14,7 @@ pub enum ChromaError {
     },
 
     /// 画像の保存に失敗
-    #[error("画像の保存に失敗しました: {path}")]
+    #[error("Failed to save image: {path}")]
     ImageSaveError {
         path: String,
         #[source]
@@ -22,11 +22,11 @@ pub enum ChromaError {
     },
 
     /// 無効なHEXカラーコード
-    #[error("無効なHEXカラーコード: {hex}")]
+    #[error("Invalid HEX color code: {hex}")]
     InvalidHexColor { hex: String },
 
     /// パラメータが範囲外
-    #[error("パラメータが範囲外です: {name} = {value} (範囲: {min} - {max})")]
+    #[error("Parameter out of range: {name} = {value} (range: {min} - {max})")]
     ParameterOutOfRange {
         name: String,
         value: f32,
@@ -35,7 +35,7 @@ pub enum ChromaError {
     },
 
     /// 入力ファイルが存在しない
-    #[error("入力ファイルが存在しません: {path}")]
+    #[error("Input file not found: {path}")]
     InputFileNotFound { path: String },
 }
 

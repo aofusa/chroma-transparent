@@ -24,9 +24,9 @@ fn main() -> anyhow::Result<()> {
     config.validate()?;
 
     if config.verbose {
-        eprintln!("入力: {:?}", args.input);
-        eprintln!("出力: {:?}", args.output_path());
-        eprintln!("設定: {:?}", config);
+        eprintln!("Input: {:?}", args.input);
+        eprintln!("Output: {:?}", args.output_path());
+        eprintln!("Config: {:?}", config);
     }
 
     // 4. 画像を読み込み
@@ -38,7 +38,7 @@ fn main() -> anyhow::Result<()> {
         .to_rgba8();
 
     if config.verbose {
-        eprintln!("画像サイズ: {}x{}", image.width(), image.height());
+        eprintln!("Image size: {}x{}", image.width(), image.height());
     }
 
     // 5. パイプラインで処理
@@ -54,6 +54,6 @@ fn main() -> anyhow::Result<()> {
             source: e,
         })?;
 
-    println!("保存完了: {}", output_path.display());
+    println!("Saved: {}", output_path.display());
     Ok(())
 }

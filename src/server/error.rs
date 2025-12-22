@@ -39,9 +39,13 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
             ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, "bad_request", msg.as_str()),
             ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, "not_found", msg.as_str()),
             ApiError::ProcessingError(msg) => {
+                // 500エラー時はサーバーログに詳細を出力
+                eprintln!("[ERROR] Processing error: {}", msg);
                 (StatusCode::INTERNAL_SERVER_ERROR, "processing_error", msg.as_str())
             }
             ApiError::InternalError(msg) => {
+                // 500エラー時はサーバーログに詳細を出力
+                eprintln!("[ERROR] Internal error: {}", msg);
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal_error", msg.as_str())
             }
             ApiError::NotImplemented(msg) => {

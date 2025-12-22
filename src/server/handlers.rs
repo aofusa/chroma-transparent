@@ -5,11 +5,11 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use bytes::Buf;
-use futures::TryStreamExt;
+use futures::{StreamExt, TryStreamExt};
 use image::{DynamicImage, GenericImageView, ImageFormat};
 use serde::Serialize;
 use tokio::sync::Mutex;
-use warp::multipart::{FormData, Part};
+use warp::multipart::FormData;
 use warp::Rejection;
 
 use crate::color::Rgb;
@@ -146,31 +146,43 @@ pub async fn handle_preview(
     form: FormData,
     config: Arc<ServerConfig>,
 ) -> Result<impl warp::Reply, Rejection> {
+    eprintln!("[DEBUG] Preview handler started");
+
     // パラメータを解析
     let mut params = parse_multipart_form(form).await?;
+    eprintln!("[DEBUG] Multipart form parsed: color={}, tolerance={}", params.color, params.tolerance);
 
     // 処理設定を構築（image_dataを取り出す前に行う）
     let process_config = build_process_config(&params, config.as_ref())?;
     let preview_size = params.preview_size.unwrap_or(512);
+    eprintln!("[DEBUG] Process config built, preview_size={}", preview_size);
 
     // 画像データを取得
     let image_data = params
         .image_data
         .take()
-        .ok_or_else(|| warp::reject::custom(ApiError::BadRequest("No image provided".into())))?;
+        .ok_or_else(|| {
+            eprintln!("[DEBUG] No image data in form");
+            warp::reject::custom(ApiError::BadRequest("No image provided".into()))
+        })?;
+    eprintln!("[DEBUG] Image data extracted: {} bytes", image_data.len());
 
     // 画像を読み込み
     let image = load_image(&image_data)?;
+    eprintln!("[DEBUG] Image loaded: {}x{}", image.width(), image.height());
 
     // プレビューサイズにリサイズ
     let image = resize_image(image, preview_size);
+    eprintln!("[DEBUG] Image resized to: {}x{}", image.width(), image.height());
 
     // クロマキー処理
     let pipeline = ChromaPipeline::new(process_config);
     let result = pipeline.process(&image.to_rgba8());
+    eprintln!("[DEBUG] Chroma key processing completed");
 
     // PNGとしてエンコード
     let png_data = encode_to_png(&result)?;
+    eprintln!("[DEBUG] PNG encoded: {} bytes", png_data.len());
 
     // レスポンス
     Ok(warp::reply::with_header(
@@ -186,36 +198,50 @@ pub async fn handle_process(
     config: Arc<ServerConfig>,
     storage: Arc<Mutex<StorageManager>>,
 ) -> Result<impl warp::Reply, Rejection> {
+    eprintln!("[DEBUG] Process handler started");
     let start = Instant::now();
 
     // パラメータを解析
     let mut params = parse_multipart_form(form).await?;
+    eprintln!("[DEBUG] Multipart form parsed: color={}, tolerance={}", params.color, params.tolerance);
 
     // 処理設定を構築（image_dataを取り出す前に行う）
     let process_config = build_process_config(&params, config.as_ref())?;
+    eprintln!("[DEBUG] Process config built");
 
     // 画像データを取得
     let image_data = params
         .image_data
         .take()
-        .ok_or_else(|| warp::reject::custom(ApiError::BadRequest("No image provided".into())))?;
+        .ok_or_else(|| {
+            eprintln!("[DEBUG] No image data in form");
+            warp::reject::custom(ApiError::BadRequest("No image provided".into()))
+        })?;
+    eprintln!("[DEBUG] Image data extracted: {} bytes", image_data.len());
 
     // 画像を読み込み
     let image = load_image(&image_data)?;
+    eprintln!("[DEBUG] Image loaded: {}x{}", image.width(), image.height());
 
     // クロマキー処理
     let pipeline = ChromaPipeline::new(process_config);
     let result = pipeline.process(&image.to_rgba8());
+    eprintln!("[DEBUG] Chroma key processing completed");
 
     // PNGとしてエンコード
     let png_data = encode_to_png(&result)?;
+    eprintln!("[DEBUG] PNG encoded: {} bytes", png_data.len());
 
     // ストレージに保存
     let file_id = storage
         .lock()
         .await
         .save(&png_data, "png")
-        .map_err(|e| warp::reject::custom(ApiError::InternalError(e.to_string())))?;
+        .map_err(|e| {
+            eprintln!("[DEBUG] Storage save failed: {}", e);
+            warp::reject::custom(ApiError::InternalError(e.to_string()))
+        })?;
+    eprintln!("[DEBUG] File saved with id: {}", file_id);
 
     let processing_time = start.elapsed().as_millis() as u64;
 
@@ -229,6 +255,7 @@ pub async fn handle_process(
         file_size: png_data.len() as u64,
     };
 
+    eprintln!("[DEBUG] Process completed in {}ms", processing_time);
     Ok(warp::reply::json(&response))
 }
 
@@ -287,7 +314,9 @@ pub async fn handle_delete(
 // === ヘルパー関数 ===
 
 /// マルチパートフォームを解析
-async fn parse_multipart_form(form: FormData) -> Result<ProcessParams, Rejection> {
+async fn parse_multipart_form(mut form: FormData) -> Result<ProcessParams, Rejection> {
+    eprintln!("[DEBUG] parse_multipart_form started");
+    
     let mut params = ProcessParams {
         color: "lime".to_string(),
         tolerance: 0.3,
@@ -298,13 +327,19 @@ async fn parse_multipart_form(form: FormData) -> Result<ProcessParams, Rejection
         ..Default::default()
     };
 
-    let parts: Vec<Part> = form
-        .try_collect()
-        .await
-        .map_err(|e| warp::reject::custom(ApiError::BadRequest(e.to_string())))?;
-
-    for part in parts {
+    // パートを一つずつ処理（try_collect()ではなくnext()を使用）
+    // warpのmultipartではtry_collect()を使うと "failed to lock multipart state" エラーが発生することがある
+    let mut part_count = 0;
+    while let Some(part_result) = form.next().await {
+        let part = part_result.map_err(|e| {
+            eprintln!("[DEBUG] Failed to get form part: {}", e);
+            warp::reject::custom(ApiError::BadRequest(e.to_string()))
+        })?;
+        
         let name = part.name().to_string();
+        eprintln!("[DEBUG] Processing form part: {}", name);
+        
+        // パートのデータを読み込み
         let data = part
             .stream()
             .try_fold(Vec::new(), |mut acc, buf| async move {
@@ -312,7 +347,13 @@ async fn parse_multipart_form(form: FormData) -> Result<ProcessParams, Rejection
                 Ok(acc)
             })
             .await
-            .map_err(|e| warp::reject::custom(ApiError::BadRequest(e.to_string())))?;
+            .map_err(|e| {
+                eprintln!("[DEBUG] Failed to read part '{}': {}", name, e);
+                warp::reject::custom(ApiError::BadRequest(e.to_string()))
+            })?;
+        
+        eprintln!("[DEBUG] Part '{}' data size: {} bytes", name, data.len());
+        part_count += 1;
 
         match name.as_str() {
             "image" | "file" => {
@@ -368,6 +409,8 @@ async fn parse_multipart_form(form: FormData) -> Result<ProcessParams, Rejection
             _ => {}
         }
     }
+    
+    eprintln!("[DEBUG] Parsed {} form parts", part_count);
 
     Ok(params)
 }
@@ -390,8 +433,12 @@ fn build_process_config(params: &ProcessParams, _config: &ServerConfig) -> Resul
 
 /// 画像を読み込み
 fn load_image(data: &[u8]) -> Result<DynamicImage, Rejection> {
+    eprintln!("[DEBUG] Loading image from {} bytes", data.len());
     image::load_from_memory(data)
-        .map_err(|e| warp::reject::custom(ApiError::BadRequest(format!("Invalid image: {}", e))))
+        .map_err(|e| {
+            eprintln!("[DEBUG] Failed to load image: {}", e);
+            warp::reject::custom(ApiError::BadRequest(format!("Invalid image: {}", e)))
+        })
 }
 
 /// 画像をリサイズ
@@ -410,10 +457,16 @@ fn resize_image(image: DynamicImage, max_size: u32) -> DynamicImage {
 
 /// 画像をPNGとしてエンコード
 fn encode_to_png(image: &image::RgbaImage) -> Result<Vec<u8>, Rejection> {
+    eprintln!("[DEBUG] Encoding image to PNG: {}x{}", image.width(), image.height());
     let mut buf = Cursor::new(Vec::new());
     image
         .write_to(&mut buf, ImageFormat::Png)
-        .map_err(|e| warp::reject::custom(ApiError::ProcessingError(e.to_string())))?;
-    Ok(buf.into_inner())
+        .map_err(|e| {
+            eprintln!("[DEBUG] Failed to encode PNG: {}", e);
+            warp::reject::custom(ApiError::ProcessingError(e.to_string()))
+        })?;
+    let result = buf.into_inner();
+    eprintln!("[DEBUG] PNG encoding completed: {} bytes", result.len());
+    Ok(result)
 }
 

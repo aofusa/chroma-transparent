@@ -73,10 +73,12 @@ pub fn routes(
     });
 
     // すべてのルートを結合
+    // 順序: cors → recover → log
+    // recoverでrejectionをレスポンスに変換した後、logでログを記録する
     api.or(static_files)
         .with(cors)
-        .with(log)
         .recover(handle_rejection)
+        .with(log)
 }
 
 /// APIルートを構築

@@ -3,6 +3,7 @@
 use std::convert::Infallible;
 use std::sync::Arc;
 
+use chrono::Local;
 use tokio::sync::Mutex;
 use warp::Filter;
 
@@ -30,9 +31,51 @@ pub fn routes(
         .allow_methods(vec!["GET", "POST", "DELETE", "OPTIONS"])
         .allow_headers(vec!["content-type"]);
 
+    // アクセスログ
+    let log = warp::log::custom(|info| {
+        let now = Local::now();
+        let status = info.status();
+        let method = info.method();
+        let path = info.path();
+        let elapsed = info.elapsed();
+        let remote_addr = info
+            .remote_addr()
+            .map(|addr| addr.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let user_agent = info
+            .request_headers()
+            .get("user-agent")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("-");
+
+        // ステータスコードに応じて色分け（ターミナル出力用）
+        let status_code = status.as_u16();
+        let status_str = if status_code >= 500 {
+            format!("\x1b[31m{}\x1b[0m", status_code) // Red
+        } else if status_code >= 400 {
+            format!("\x1b[33m{}\x1b[0m", status_code) // Yellow
+        } else if status_code >= 300 {
+            format!("\x1b[36m{}\x1b[0m", status_code) // Cyan
+        } else {
+            format!("\x1b[32m{}\x1b[0m", status_code) // Green
+        };
+
+        println!(
+            "{} {} {} \"{}\" {} {:.3}ms \"{}\"",
+            now.format("%Y-%m-%d %H:%M:%S"),
+            remote_addr,
+            method,
+            path,
+            status_str,
+            elapsed.as_secs_f64() * 1000.0,
+            user_agent
+        );
+    });
+
     // すべてのルートを結合
     api.or(static_files)
         .with(cors)
+        .with(log)
         .recover(handle_rejection)
 }
 

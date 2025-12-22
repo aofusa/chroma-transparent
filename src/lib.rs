@@ -26,6 +26,7 @@ pub mod config;
 pub mod error;
 pub mod pipeline;
 pub mod processor;
+pub mod scanner;
 
 // 主要な型を再エクスポート
 pub use cli::Args;
@@ -33,4 +34,5 @@ pub use color::Rgb;
 pub use config::ProcessConfig;
 pub use error::{ChromaError, Result};
 pub use pipeline::ChromaPipeline;
+pub use scanner::{ensure_output_directory, ImageScanner};
 

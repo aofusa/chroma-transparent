@@ -9,105 +9,198 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
 </head>
 <body>
-    <header>
-        <h1>chroma-transparent</h1>
-        <nav>
-            <a href="/api/docs" target="_blank">API DOCS</a>
-        </nav>
-    </header>
+    <div class="app-container">
+        <!-- Header -->
+        <header>
+            <h1>chroma-transparent</h1>
+            <nav>
+                <a href="/api/docs" target="_blank">API DOCS</a>
+            </nav>
+        </header>
 
-    <main>
-        <section class="upload-section">
-            <div class="dropzone" id="dropzone">
-                <div class="dropzone-content">
-                    <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>
-                        <path d="M12 3v12"/>
-                        <path d="M8 7l4-4 4 4"/>
-                    </svg>
-                    <p>画像をドロップ、または</p>
-                    <p class="hint"><label for="file-input" class="file-label">ファイルを選択</label></p>
-                    <input type="file" id="file-input" accept="image/*" hidden>
-                </div>
-            </div>
-        </section>
-
-        <section class="preview-section" id="preview-section" hidden>
-            <div class="preview-container">
-                <div class="preview-panel">
-                    <h3>入力画像</h3>
-                    <div class="image-wrapper checkerboard">
-                        <img id="original-image" alt="Original">
+        <!-- Main Content -->
+        <main>
+            <!-- Upload Section (初期状態) -->
+            <section class="upload-section" id="upload-section">
+                <div class="dropzone" id="dropzone">
+                    <div class="dropzone-content">
+                        <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>
+                            <path d="M12 3v12"/>
+                            <path d="M8 7l4-4 4 4"/>
+                        </svg>
+                        <p>画像をドロップ、または</p>
+                        <p class="hint"><label for="file-input" class="file-label">ファイルを選択</label></p>
+                        <input type="file" id="file-input" accept="image/*" hidden>
                     </div>
                 </div>
-                <div class="preview-panel">
-                    <h3>プレビュー</h3>
-                    <div class="image-wrapper checkerboard">
-                        <img id="preview-image" alt="Preview">
-                        <div class="loading-overlay" id="loading-overlay" hidden>
-                            <div class="spinner"></div>
+            </section>
+
+            <!-- Editor Section (画像読み込み後) -->
+            <section class="editor-section" id="editor-section" hidden>
+                <!-- 比較ビューエリア -->
+                <div class="compare-view" id="compare-view">
+                    <!-- ツールバー -->
+                    <div class="view-toolbar">
+                        <div class="toolbar-left">
+                            <button class="tool-btn" id="btn-zoom-out" title="縮小 (-)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M8 11h6"/>
+                                </svg>
+                            </button>
+                            <span class="zoom-level" id="zoom-level">100%</span>
+                            <button class="tool-btn" id="btn-zoom-in" title="拡大 (+)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6"/><path d="M8 11h6"/>
+                                </svg>
+                            </button>
+                            <button class="tool-btn" id="btn-zoom-fit" title="フィット (0)">FIT</button>
+                            <button class="tool-btn" id="btn-zoom-100" title="100% (1)">1:1</button>
+                        </div>
+                        <div class="toolbar-center">
+                            <div class="view-mode-switch">
+                                <button class="mode-btn active" data-mode="compare" title="比較表示">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18"/>
+                                    </svg>
+                                </button>
+                                <button class="mode-btn" data-mode="original" title="元画像 (Tab)">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
+                                    </svg>
+                                </button>
+                                <button class="mode-btn" data-mode="preview" title="処理後 (Tab)">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M9 12l2 2 4-4"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="toolbar-right">
+                            <button class="tool-btn" id="btn-reset-view" title="ビューリセット">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                                    <path d="M3 3v5h5"/>
+                                </svg>
+                            </button>
+                            <button class="tool-btn" id="btn-fullscreen" title="フルスクリーン (F)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M8 3H5a2 2 0 0 0-2 2v3"/>
+                                    <path d="M21 8V5a2 2 0 0 0-2-2h-3"/>
+                                    <path d="M3 16v3a2 2 0 0 0 2 2h3"/>
+                                    <path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
+                                </svg>
+                            </button>
+                            <button class="tool-btn" id="btn-new-image" title="別の画像を選択">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17 8 12 3 7 8"/>
+                                    <line x1="12" y1="3" x2="12" y2="15"/>
+                                </svg>
+                            </button>
                         </div>
                     </div>
+
+                    <!-- 画像表示エリア -->
+                    <div class="image-viewport" id="image-viewport">
+                        <div class="image-container" id="image-container">
+                            <!-- 元画像レイヤー -->
+                            <div class="image-layer original-layer" id="original-layer">
+                                <img id="original-image" alt="Original">
+                            </div>
+                            <!-- 処理後画像レイヤー -->
+                            <div class="image-layer preview-layer" id="preview-layer">
+                                <img id="preview-image" alt="Preview">
+                                <div class="loading-overlay" id="loading-overlay" hidden>
+                                    <div class="spinner"></div>
+                                </div>
+                            </div>
+                            <!-- 比較スライダー -->
+                            <div class="compare-slider" id="compare-slider">
+                                <div class="slider-line"></div>
+                                <div class="slider-handle">
+                                    <svg viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M8 5l-5 7 5 7V5z"/>
+                                        <path d="M16 5l5 7-5 7V5z"/>
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ステータスバー -->
+                    <div class="status-bar">
+                        <span class="status-item" id="status-filename">-</span>
+                        <span class="status-item" id="status-dimensions">-</span>
+                        <span class="status-item" id="status-position">-</span>
+                    </div>
                 </div>
-            </div>
-        </section>
 
-        <section class="controls-section" id="controls-section" hidden>
-            <h3>パラメータ設定</h3>
-            
-            <div class="control-group">
-                <label for="color-select">クロマキー色</label>
-                <div class="color-input-group">
-                    <select id="color-select">
-                        <option value="lime" selected>lime / 明るい緑</option>
-                        <option value="green">green / 暗い緑</option>
-                        <option value="blue">blue / 青</option>
-                        <option value="magenta">magenta / マゼンタ</option>
-                        <option value="cyan">cyan / シアン</option>
-                        <option value="red">red / 赤</option>
-                        <option value="yellow">yellow / 黄</option>
-                        <option value="custom">カスタム HEX...</option>
-                    </select>
-                    <input type="text" id="color-custom" placeholder="#00FF00" hidden>
-                    <div class="color-preview" id="color-preview"></div>
+                <!-- リサイズハンドル -->
+                <div class="panel-resizer" id="panel-resizer">
+                    <div class="resizer-handle"></div>
                 </div>
-            </div>
 
-            <div class="control-group">
-                <label for="tolerance">許容範囲 <span id="tolerance-value">0.30</span></label>
-                <input type="range" id="tolerance" min="0" max="1" step="0.01" value="0.3">
-            </div>
+                <!-- パラメータパネル -->
+                <div class="params-panel" id="params-panel">
+                    <div class="params-grid">
+                        <div class="param-group">
+                            <label for="color-select">クロマキー色</label>
+                            <div class="color-input-group">
+                                <select id="color-select">
+                                    <option value="lime" selected>lime / 明るい緑</option>
+                                    <option value="green">green / 暗い緑</option>
+                                    <option value="blue">blue / 青</option>
+                                    <option value="magenta">magenta / マゼンタ</option>
+                                    <option value="cyan">cyan / シアン</option>
+                                    <option value="red">red / 赤</option>
+                                    <option value="yellow">yellow / 黄</option>
+                                    <option value="custom">カスタム HEX...</option>
+                                </select>
+                                <input type="text" id="color-custom" placeholder="#00FF00" hidden>
+                                <div class="color-preview" id="color-preview"></div>
+                            </div>
+                        </div>
 
-            <div class="control-group">
-                <label for="feather">フェザリング <span id="feather-value">5</span></label>
-                <input type="range" id="feather" min="0" max="50" step="1" value="5">
-            </div>
+                        <div class="param-group">
+                            <label for="tolerance">許容範囲 <span id="tolerance-value">0.30</span></label>
+                            <input type="range" id="tolerance" min="0" max="1" step="0.01" value="0.3">
+                        </div>
 
-            <div class="control-group">
-                <label for="despill">デスピル <span id="despill-value">0.70</span></label>
-                <input type="range" id="despill" min="0" max="1" step="0.01" value="0.7">
-            </div>
+                        <div class="param-group">
+                            <label for="feather">フェザリング <span id="feather-value">5</span></label>
+                            <input type="range" id="feather" min="0" max="50" step="1" value="5">
+                        </div>
 
-            <div class="control-group">
-                <label for="erode">収縮 <span id="erode-value">0</span></label>
-                <input type="range" id="erode" min="0" max="10" step="1" value="0">
-            </div>
+                        <div class="param-group">
+                            <label for="despill">デスピル <span id="despill-value">0.70</span></label>
+                            <input type="range" id="despill" min="0" max="1" step="0.01" value="0.7">
+                        </div>
 
-            <div class="control-group">
-                <label for="dilate">膨張 <span id="dilate-value">1</span></label>
-                <input type="range" id="dilate" min="0" max="10" step="1" value="1">
-            </div>
+                        <div class="param-group">
+                            <label for="erode">収縮 <span id="erode-value">0</span></label>
+                            <input type="range" id="erode" min="0" max="10" step="1" value="0">
+                        </div>
 
-            <div class="action-buttons">
-                <button id="reset-btn" class="btn btn-secondary">リセット</button>
-                <button id="process-btn" class="btn btn-primary">処理してダウンロード</button>
-            </div>
-        </section>
-    </main>
+                        <div class="param-group">
+                            <label for="dilate">膨張 <span id="dilate-value">1</span></label>
+                            <input type="range" id="dilate" min="0" max="10" step="1" value="1">
+                        </div>
+                    </div>
 
-    <footer>
-        <p>chroma-transparent v<span id="version">-</span> — Industrial Precision Processing</p>
-    </footer>
+                    <div class="action-buttons">
+                        <button id="reset-btn" class="btn btn-secondary">リセット</button>
+                        <button id="process-btn" class="btn btn-primary">処理してダウンロード</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer>
+            <p>chroma-transparent v<span id="version">-</span></p>
+        </footer>
+    </div>
 
     <script src="/app.js"></script>
 </body>

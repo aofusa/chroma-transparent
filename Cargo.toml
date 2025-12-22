@@ -14,5 +14,9 @@ clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 thiserror = "1"
 
+# アロケータ (macOS, FreeBSD以外で使用)
+[target.'cfg(not(any(target_os = "macos", target_os = "freebsd")))'.dependencies]
+mimalloc = "0.1"
+
 [dev-dependencies]
 tempfile = "3"

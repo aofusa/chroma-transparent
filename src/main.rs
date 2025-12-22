@@ -1,5 +1,13 @@
 //! chroma-transparent - クロマキー透過処理CLIツール
 
+// mimallocをグローバルアロケータとして使用 (macOS, FreeBSD以外)
+#[cfg(not(any(target_os = "macos", target_os = "freebsd")))]
+use mimalloc::MiMalloc;
+
+#[cfg(not(any(target_os = "macos", target_os = "freebsd")))]
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
 use clap::Parser;
 
 use chroma_transparent::{Args, ChromaError, ChromaPipeline, ProcessConfig};

@@ -1,0 +1,222 @@
+# chroma-transparent
+
+![Rust](https://img.shields.io/badge/rust-1.70%2B-orange)
+![License](https://img.shields.io/badge/license-Apache--2.0-blue)
+
+指定した画像の指定された色をクロマキー処理して透過PNGに変換するCLIツールです。
+
+グリーンバック画像やブルーバック画像など、単色背景の画像から被写体を切り抜いて透過PNGを生成できます。
+
+## 機能
+
+- **クロマキー処理**: 指定した色（HEXコード）を透過に変換
+- **HSV色空間での色検出**: 照明条件の変化に強い色検出アルゴリズム
+- **モルフォロジー演算**: 収縮（Erode）/膨張（Dilate）でマスクを微調整
+- **フェザリング**: ガウシアンブラーでエッジを滑らかに
+- **デスピル**: 被写体の縁に残った背景色の反射（色かぶり）を除去
+- **柔軟なパラメータ調整**: すべての処理パラメータをコマンドラインから調整可能
+
+## インストール
+
+### ソースからビルド
+
+```bash
+git clone https://github.com/aofusa/chroma-transparent.git
+cd chroma-transparent
+cargo build --release
+```
+
+ビルド後、実行ファイルは `target/release/chroma-transparent` に生成されます。
+
+### Cargoでインストール
+
+```bash
+cargo install --path .
+```
+
+## 使い方
+
+### 基本的な使用法
+
+```bash
+# グリーンバック画像を透過PNGに変換（デフォルト設定）
+chroma-transparent input.png
+
+# 出力ファイル名を指定
+chroma-transparent input.png -o output.png
+
+# 青色をクロマキー処理
+chroma-transparent input.png -c 0000FF
+
+# マゼンタをクロマキー処理
+chroma-transparent input.png -c FF00FF
+```
+
+### 詳細なパラメータ調整
+
+```bash
+# 許容範囲を広げて色ムラに対応
+chroma-transparent input.png -t 0.4
+
+# フェザリングを強めてエッジを滑らかに
+chroma-transparent input.png -f 10
+
+# デスピルを強めて色かぶりを除去
+chroma-transparent input.png -d 0.9
+
+# ノイズが多い画像に対応（収縮処理を追加）
+chroma-transparent input.png -e 2 -D 2
+
+# すべてのオプションを指定
+chroma-transparent input.png \
+  --output result.png \
+  --color 00FF00 \
+  --tolerance 0.35 \
+  --feather 8 \
+  --despill 0.8 \
+  --erode 1 \
+  --dilate 2 \
+  --verbose
+```
+
+## コマンドラインオプション
+
+| オプション | 短縮形 | 説明 | デフォルト値 | 範囲 |
+|-----------|-------|------|-------------|------|
+| `<INPUT>` | - | 入力画像のパス（必須） | - | - |
+| `--output` | `-o` | 出力ファイルのパス | `<入力ファイル名>.chroma.png` | - |
+| `--color` | `-c` | クロマキー処理する色（HEXコード） | `00FF00`（緑） | RRGGBB形式 |
+| `--tolerance` | `-t` | 色の許容範囲 | `0.3` | 0.0 - 1.0 |
+| `--feather` | `-f` | フェザリング量 | `5` | 0 - 50 |
+| `--despill` | `-d` | デスピル強度 | `0.7` | 0.0 - 1.0 |
+| `--erode` | `-e` | 収縮回数 | `0` | 0 - 10 |
+| `--dilate` | `-D` | 膨張回数 | `1` | 0 - 10 |
+| `--verbose` | `-v` | 詳細ログを出力 | `false` | - |
+| `--help` | `-h` | ヘルプを表示 | - | - |
+| `--version` | `-V` | バージョンを表示 | - | - |
+
+## パラメータガイド
+
+### tolerance（色の許容範囲）
+
+色検出の許容範囲を指定します。値が大きいほど、ターゲット色に近い色も透過対象になります。
+
+| 値 | 用途 |
+|----|-----|
+| 0.1 - 0.2 | 完全に均一な色の背景（CGなど） |
+| **0.3** | **デフォルト** - 一般的なグリーンバック |
+| 0.4 - 0.5 | 照明ムラがある背景 |
+| 0.6+ | 非常に不均一な背景（誤検出に注意） |
+
+### feather（フェザリング量）
+
+エッジのぼかし量を指定します。ギザギザしたエッジを滑らかにします。
+
+| 値 | 用途 |
+|----|-----|
+| 0 | フェザリングなし（シャープなエッジ） |
+| 1 - 3 | 軽微なスムージング |
+| **5** | **デフォルト** - 自然なエッジ |
+| 10+ | ソフトなエッジ効果 |
+
+### despill（デスピル強度）
+
+被写体の縁に残った背景色の反射（色かぶり）を除去する強度を指定します。
+
+| 値 | 用途 |
+|----|-----|
+| 0.0 | デスピルなし |
+| 0.5 | 軽い色かぶり除去 |
+| **0.7** | **デフォルト** - 一般的な強度 |
+| 0.9 - 1.0 | 強い色かぶりの除去 |
+
+### erode / dilate（収縮 / 膨張）
+
+マスクのモルフォロジー演算回数を指定します。
+
+| erode | dilate | 用途 |
+|-------|--------|-----|
+| **0** | **1** | **デフォルト** - 一般的な画像 |
+| 1-2 | 1-2 | ノイズが多い画像 |
+| 0 | 2-3 | 細いエッジを保持したい場合 |
+| 2-3 | 0 | 背景の残りを確実に除去 |
+
+## 処理フロー
+
+```
+入力画像
+    ↓
+RGB → HSV 変換
+    ↓
+クロマキーマスク生成（指定色を検出）
+    ↓
+モルフォロジー演算（収縮 → 膨張）
+    ↓
+アルファチャンネル生成
+    ↓
+フェザリング（ガウシアンブラー）
+    ↓
+デスピル処理（色かぶり除去）
+    ↓
+透過PNG出力
+```
+
+## ライブラリとして使用
+
+このプロジェクトはライブラリとしても使用できます。
+
+```rust
+use chroma_transparent::{ChromaPipeline, ProcessConfig, Rgb};
+
+fn main() -> anyhow::Result<()> {
+    // 設定を構築
+    let config = ProcessConfig {
+        chroma_color: Rgb::from_hex("00FF00")?,
+        tolerance: 0.3,
+        feather_amount: 5,
+        despill_strength: 0.7,
+        erode_iterations: 0,
+        dilate_iterations: 1,
+        verbose: false,
+    };
+
+    // パイプラインを作成
+    let pipeline = ChromaPipeline::new(config);
+
+    // 画像を読み込んで処理
+    let image = image::open("input.png")?.to_rgba8();
+    let result = pipeline.process(&image);
+
+    // 保存
+    result.save("output.png")?;
+
+    Ok(())
+}
+```
+
+## 対応画像フォーマット
+
+### 入力
+
+- PNG
+- JPEG
+- GIF
+- BMP
+- WebP
+- TIFF
+- その他 `image` クレートがサポートするフォーマット
+
+### 出力
+
+- PNG（アルファチャンネル付き）
+
+## 動作要件
+
+- Rust 1.70 以上
+
+## ライセンス
+
+[Apache-2.0](LICENSE)
+
+(c) 2025 aofusa
+

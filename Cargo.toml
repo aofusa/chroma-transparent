@@ -1,0 +1,18 @@
+[package]
+name = "chroma-transparent"
+version = "0.1.0"
+edition = "2021"
+authors = ["aofusa"]
+description = "指定した色をクロマキー処理して透過PNGに変換するCLIツール"
+license = "Apache-2.0"
+keywords = ["chroma-key", "transparent", "image", "png", "cli"]
+categories = ["command-line-utilities", "multimedia::images"]
+
+[dependencies]
+image = "0.25"
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+thiserror = "1"
+
+[dev-dependencies]
+tempfile = "3"

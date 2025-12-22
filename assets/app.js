@@ -1,5 +1,6 @@
 /**
  * chroma-transparent Web UI
+ * Industrial Precision Design
  */
 
 class ChromaApp {
@@ -43,7 +44,7 @@ class ChromaApp {
             dilate: 1
         };
         
-        // Color map
+        // Color map for preview
         this.colorMap = {
             lime: '#00ff00',
             green: '#008000',
@@ -60,11 +61,16 @@ class ChromaApp {
     init() {
         this.bindEvents();
         this.loadConfig();
+        this.updateColorPreview();
     }
     
     bindEvents() {
         // Dropzone events
-        this.dropzone.addEventListener('click', () => this.fileInput.click());
+        this.dropzone.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'LABEL') {
+                this.fileInput.click();
+            }
+        });
         this.dropzone.addEventListener('dragover', (e) => this.handleDragOver(e));
         this.dropzone.addEventListener('dragleave', () => this.dropzone.classList.remove('dragover'));
         this.dropzone.addEventListener('drop', (e) => this.handleDrop(e));
@@ -96,12 +102,11 @@ class ChromaApp {
     
     async loadConfig() {
         try {
-            const res = await fetch('/api/config');
-            const config = await res.json();
-            document.getElementById('version').textContent = 
-                (await (await fetch('/api/health')).json()).version;
+            const healthRes = await fetch('/api/health');
+            const health = await healthRes.json();
+            document.getElementById('version').textContent = health.version || '0.1.0';
         } catch (e) {
-            console.error('Failed to load config:', e);
+            console.warn('Failed to load config:', e);
         }
     }
     
@@ -130,7 +135,7 @@ class ChromaApp {
     
     async loadFile(file) {
         if (!file.type.startsWith('image/')) {
-            alert('画像ファイルを選択してください');
+            this.showNotification('画像ファイルを選択してください', 'error');
             return;
         }
         
@@ -140,18 +145,23 @@ class ChromaApp {
         const url = URL.createObjectURL(file);
         this.originalImage.src = url;
         
-        // Resize for preview
+        // Resize for preview (smaller = faster)
         this.resizedBlob = await this.resizeImage(file, 512);
         
-        // Show sections
+        // Show sections with animation
         this.previewSection.hidden = false;
         this.controlsSection.hidden = false;
         
-        // Update dropzone
+        // Update dropzone to show file info
+        const fileSize = this.formatFileSize(file.size);
         this.dropzone.innerHTML = `
             <div class="dropzone-content">
-                <p>📁 ${file.name}</p>
-                <p class="hint">別の画像をドロップして置き換え</p>
+                <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M9 12l2 2 4-4"/>
+                    <circle cx="12" cy="12" r="10"/>
+                </svg>
+                <p>${this.escapeHtml(file.name)}</p>
+                <p class="hint">${fileSize} — 別の画像をドロップして置き換え</p>
             </div>
         `;
         
@@ -179,6 +189,7 @@ class ChromaApp {
                 ctx.drawImage(img, 0, 0, width, height);
                 
                 canvas.toBlob((blob) => {
+                    URL.revokeObjectURL(img.src);
                     resolve(blob);
                 }, 'image/png');
             };
@@ -188,20 +199,15 @@ class ChromaApp {
     
     handleColorChange() {
         const value = this.colorSelect.value;
-        
-        if (value === 'custom') {
-            this.colorCustom.hidden = false;
-        } else {
-            this.colorCustom.hidden = true;
-        }
-        
+        this.colorCustom.hidden = value !== 'custom';
         this.updateColorPreview();
         this.schedulePreview();
     }
     
     getColor() {
         if (this.colorSelect.value === 'custom') {
-            return this.colorCustom.value || 'lime';
+            const custom = this.colorCustom.value.trim();
+            return custom || 'lime';
         }
         return this.colorSelect.value;
     }
@@ -254,10 +260,17 @@ class ChromaApp {
             });
             
             if (!res.ok) {
-                throw new Error('Preview failed');
+                const error = await res.json().catch(() => ({}));
+                throw new Error(error.message || 'Preview failed');
             }
             
             const blob = await res.blob();
+            
+            // Revoke old URL
+            if (this.previewImage.src.startsWith('blob:')) {
+                URL.revokeObjectURL(this.previewImage.src);
+            }
+            
             this.previewImage.src = URL.createObjectURL(blob);
         } catch (e) {
             if (e.name !== 'AbortError') {
@@ -270,6 +283,7 @@ class ChromaApp {
     
     resetParams() {
         this.colorSelect.value = this.defaults.color;
+        this.colorCustom.value = '';
         this.colorCustom.hidden = true;
         this.toleranceSlider.value = this.defaults.tolerance;
         this.featherSlider.value = this.defaults.feather;
@@ -307,7 +321,7 @@ class ChromaApp {
             });
             
             if (!res.ok) {
-                const error = await res.json();
+                const error = await res.json().catch(() => ({}));
                 throw new Error(error.message || 'Processing failed');
             }
             
@@ -321,7 +335,7 @@ class ChromaApp {
             link.click();
             document.body.removeChild(link);
             
-            this.processBtn.textContent = '✓ ダウンロード完了';
+            this.processBtn.textContent = '✓ 完了';
             setTimeout(() => {
                 this.processBtn.textContent = '処理してダウンロード';
                 this.processBtn.disabled = false;
@@ -329,15 +343,32 @@ class ChromaApp {
             
         } catch (e) {
             console.error('Process error:', e);
-            alert('処理に失敗しました: ' + e.message);
+            this.showNotification('処理に失敗しました: ' + e.message, 'error');
             this.processBtn.textContent = '処理してダウンロード';
             this.processBtn.disabled = false;
         }
     }
+    
+    // Utility methods
+    formatFileSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+    
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    showNotification(message, type = 'info') {
+        // Simple alert for now - can be enhanced with toast notifications
+        alert(message);
+    }
 }
 
-// Initialize
+// Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     window.app = new ChromaApp();
 });
-

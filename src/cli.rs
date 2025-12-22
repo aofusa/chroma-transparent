@@ -19,10 +19,12 @@ use crate::error::{ChromaError, Result};
 ファイルまたはディレクトリを入力として指定できます。
 ディレクトリを指定した場合、そのディレクトリ内のすべての画像ファイルを処理します。
 
+色の指定にはHEXコード（00FF00）またはCSS色名（lime, green, blue等）が使用できます。
+
 例:
   chroma-transparent photo.png
-  chroma-transparent photo.png -o result.png -c 00FF00
-  chroma-transparent photo.png -t 0.4 -f 10 -d 0.9
+  chroma-transparent photo.png -o result.png -c lime
+  chroma-transparent photo.png -c blue -t 0.4 -f 10 -d 0.9
   chroma-transparent ./input_dir -o ./output_dir
   chroma-transparent ./input_dir -o ./output_dir -r 2
 "#)]
@@ -35,8 +37,8 @@ pub struct Args {
     #[arg(short, long, value_name = "OUTPUT")]
     pub output: Option<PathBuf>,
 
-    /// クロマキー処理する色 (HEXコード)
-    #[arg(short, long, default_value = "00FF00", value_name = "HEX")]
+    /// クロマキー処理する色 (HEXコードまたはCSS色名)
+    #[arg(short, long, default_value = "lime", value_name = "COLOR")]
     pub color: String,
 
     /// 色の許容範囲 (0.0 - 1.0)

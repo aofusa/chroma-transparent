@@ -95,7 +95,8 @@ impl ProcessConfig {
 
     /// CLIからConfigを構築
     pub fn from_cli(args: &Args) -> Result<Self> {
-        let chroma_color = Rgb::from_hex(&args.color)?;
+        // HEXコードまたは色名を受け付ける
+        let chroma_color = Rgb::from_color_spec(&args.color)?;
 
         Ok(Self {
             chroma_color,

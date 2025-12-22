@@ -9,7 +9,8 @@
 
 ## 機能
 
-- **クロマキー処理**: 指定した色（HEXコード）を透過に変換
+- **クロマキー処理**: 指定した色（HEXコードまたはCSS色名）を透過に変換
+- **CSS 147色対応**: `lime`, `blue`, `magenta` などの色名で指定可能
 - **HSV色空間での色検出**: 照明条件の変化に強い色検出アルゴリズム
 - **モルフォロジー演算**: 収縮（Erode）/膨張（Dilate）でマスクを微調整
 - **フェザリング**: ガウシアンブラーでエッジを滑らかに
@@ -41,17 +42,20 @@ cargo install --path .
 ### 基本的な使用法
 
 ```bash
-# グリーンバック画像を透過PNGに変換（デフォルト設定）
+# グリーンバック画像を透過PNGに変換（デフォルト: lime）
 chroma-transparent input.png
 
 # 出力ファイル名を指定
 chroma-transparent input.png -o output.png
 
-# 青色をクロマキー処理
-chroma-transparent input.png -c 0000FF
+# 色名で指定（CSS色名対応）
+chroma-transparent input.png -c blue
+chroma-transparent input.png -c magenta
+chroma-transparent input.png -c skyblue
 
-# マゼンタをクロマキー処理
-chroma-transparent input.png -c FF00FF
+# HEXコードで指定
+chroma-transparent input.png -c 0000FF
+chroma-transparent input.png -c "#FF00FF"
 ```
 
 ### ディレクトリの一括処理
@@ -103,7 +107,7 @@ chroma-transparent input.png \
 |-----------|-------|------|-------------|------|
 | `<INPUT>` | - | 入力画像またはディレクトリのパス（必須） | - | - |
 | `--output` | `-o` | 出力ファイルまたはディレクトリのパス | `<入力ファイル名>.chroma.png` | - |
-| `--color` | `-c` | クロマキー処理する色（HEXコード） | `00FF00`（緑） | RRGGBB形式 |
+| `--color` | `-c` | クロマキー処理する色（HEXコードまたはCSS色名） | `lime`（緑） | CSS色名 or RRGGBB |
 | `--tolerance` | `-t` | 色の許容範囲 | `0.3` | 0.0 - 1.0 |
 | `--feather` | `-f` | フェザリング量 | `5` | 0 - 50 |
 | `--despill` | `-d` | デスピル強度 | `0.7` | 0.0 - 1.0 |
@@ -159,6 +163,44 @@ chroma-transparent input.png \
 | 1-2 | 1-2 | ノイズが多い画像 |
 | 0 | 2-3 | 細いエッジを保持したい場合 |
 | 2-3 | 0 | 背景の残りを確実に除去 |
+
+## 対応色名一覧
+
+HTML 4.01 基本16色 + CSS3 拡張色（計147色）に対応しています。
+
+### クロマキーでよく使う色
+
+| 色名 | 説明 |
+|------|------|
+| `lime` | 明るい緑（00FF00）- **デフォルト** |
+| `green` | 暗い緑（008000）- HTML標準 |
+| `blue` | 青（0000FF） |
+| `magenta` / `fuchsia` | マゼンタ（FF00FF） |
+| `cyan` / `aqua` | シアン（00FFFF） |
+
+### HTML 4.01 基本16色
+
+`white`, `silver`, `gray`, `black`, `red`, `maroon`, `yellow`, `olive`, `lime`, `green`, `aqua`, `teal`, `blue`, `navy`, `fuchsia`, `purple`
+
+### CSS3 拡張色（一部）
+
+**赤系**: `indianred`, `lightcoral`, `salmon`, `crimson`, `darkred`, `pink`, `hotpink`, `deeppink`
+
+**オレンジ系**: `coral`, `tomato`, `orangered`, `darkorange`, `orange`
+
+**黄系**: `gold`, `lightyellow`, `khaki`
+
+**緑系**: `limegreen`, `forestgreen`, `darkgreen`, `seagreen`, `springgreen`
+
+**青系**: `skyblue`, `lightblue`, `deepskyblue`, `dodgerblue`, `royalblue`, `darkblue`, `midnightblue`
+
+**紫系**: `lavender`, `violet`, `orchid`, `purple`, `indigo`, `rebeccapurple`
+
+**茶系**: `brown`, `chocolate`, `sienna`, `tan`, `beige`
+
+**灰系**: `lightgray`, `darkgray`, `slategray`
+
+> 完全な一覧は [CSS Color Module Level 4](https://www.w3.org/TR/css-color-4/#named-colors) を参照してください。
 
 ## 処理フロー
 

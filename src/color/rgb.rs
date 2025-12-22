@@ -1,5 +1,6 @@
 //! RGB色構造体
 
+use crate::color::names::find_color_by_name;
 use crate::error::{ChromaError, Result};
 
 /// RGB色構造体
@@ -14,6 +15,21 @@ impl Rgb {
     /// 新しいRGB色を作成
     pub fn new(r: u8, g: u8, b: u8) -> Self {
         Self { r, g, b }
+    }
+
+    /// 色指定文字列からRGBを生成
+    /// HEXコード（"RRGGBB", "#RRGGBB", "RGB", "#RGB"）または
+    /// 色名（"red", "green", "blue"など）を受け付ける
+    pub fn from_color_spec(spec: &str) -> Result<Self> {
+        let spec = spec.trim();
+
+        // まず色名として検索
+        if let Some(hex) = find_color_by_name(spec) {
+            return Self::from_hex(hex);
+        }
+
+        // 色名でなければHEXコードとしてパース
+        Self::from_hex(spec)
     }
 
     /// HEXコード文字列からRGBを生成
@@ -108,6 +124,51 @@ mod tests {
         assert!((r - 1.0).abs() < 0.001);
         assert!((g - 0.502).abs() < 0.01);
         assert!((b - 0.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_from_color_spec_hex() {
+        let rgb = Rgb::from_color_spec("FF0000").unwrap();
+        assert_eq!(rgb, Rgb::new(255, 0, 0));
+    }
+
+    #[test]
+    fn test_from_color_spec_name() {
+        let rgb = Rgb::from_color_spec("red").unwrap();
+        assert_eq!(rgb, Rgb::new(255, 0, 0));
+    }
+
+    #[test]
+    fn test_from_color_spec_name_case_insensitive() {
+        let rgb = Rgb::from_color_spec("RED").unwrap();
+        assert_eq!(rgb, Rgb::new(255, 0, 0));
+
+        let rgb = Rgb::from_color_spec("SkyBlue").unwrap();
+        assert_eq!(rgb, Rgb::new(135, 206, 235));
+    }
+
+    #[test]
+    fn test_from_color_spec_lime_vs_green() {
+        // lime = 00FF00 (明るい緑)
+        let lime = Rgb::from_color_spec("lime").unwrap();
+        assert_eq!(lime, Rgb::new(0, 255, 0));
+
+        // green = 008000 (暗い緑) - HTML標準
+        let green = Rgb::from_color_spec("green").unwrap();
+        assert_eq!(green, Rgb::new(0, 128, 0));
+    }
+
+    #[test]
+    fn test_from_color_spec_css_colors() {
+        // いくつかのCSS色をテスト
+        let coral = Rgb::from_color_spec("coral").unwrap();
+        assert_eq!(coral, Rgb::new(255, 127, 80));
+
+        let navy = Rgb::from_color_spec("navy").unwrap();
+        assert_eq!(navy, Rgb::new(0, 0, 128));
+
+        let gold = Rgb::from_color_spec("gold").unwrap();
+        assert_eq!(gold, Rgb::new(255, 215, 0));
     }
 }
 

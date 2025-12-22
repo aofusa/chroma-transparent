@@ -75,6 +75,32 @@
                                     </svg>
                                 </button>
                             </div>
+                            
+                            <!-- 背景選択 -->
+                            <div class="bg-mode-switch">
+                                <button class="bg-btn active" data-bg="checker" title="透過背景">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="3" width="8" height="8"/><rect x="13" y="13" width="8" height="8"/>
+                                    </svg>
+                                </button>
+                                <button class="bg-btn" data-bg="white" title="白背景">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10" fill="white"/>
+                                    </svg>
+                                </button>
+                                <button class="bg-btn" data-bg="black" title="黒背景">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10" fill="black"/>
+                                    </svg>
+                                </button>
+                                <button class="bg-btn" data-bg="custom" title="カスタム背景">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <path d="M12 2a10 10 0 0 1 0 20"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <input type="color" id="bg-color-picker" value="#808080" hidden>
                         </div>
                         <div class="toolbar-right">
                             <button class="tool-btn" id="btn-reset-view" title="ビューリセット">
@@ -91,13 +117,15 @@
                                     <path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
                                 </svg>
                             </button>
-                            <button class="tool-btn" id="btn-new-image" title="別の画像を選択">
+                            <!-- 別の画像を選択 -->
+                            <label class="tool-btn upload-btn" for="file-input-editor" title="別の画像を選択">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                                     <polyline points="17 8 12 3 7 8"/>
                                     <line x1="12" y1="3" x2="12" y2="15"/>
                                 </svg>
-                            </button>
+                            </label>
+                            <input type="file" id="file-input-editor" accept="image/*" hidden>
                         </div>
                     </div>
 
@@ -155,10 +183,14 @@
                                     <option value="cyan">cyan / シアン</option>
                                     <option value="red">red / 赤</option>
                                     <option value="yellow">yellow / 黄</option>
-                                    <option value="custom">カスタム HEX...</option>
+                                    <option value="custom">カスタム...</option>
                                 </select>
                                 <input type="text" id="color-custom" placeholder="#00FF00" hidden>
-                                <div class="color-preview" id="color-preview"></div>
+                                <!-- カラーピッカー付きプレビュー -->
+                                <div class="color-preview-wrapper">
+                                    <div class="color-preview" id="color-preview" title="クリックでカラーピッカー"></div>
+                                    <input type="color" id="chroma-color-picker" value="#00ff00">
+                                </div>
                             </div>
                         </div>
 

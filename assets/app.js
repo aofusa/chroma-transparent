@@ -3,9 +3,10 @@
  * Advanced Compare View with Zoom/Pan/Slider
  * 
  * 修正済み:
- * - 元画像とプレビュー画像のサイズを統一
- * - スライダーを画面に固定（画像と一緒に動かない）
- * - 正しい左右分割表示
+ * - スライダー位置と画像クリップを正確に同期
+ * - カラーピッカー対応
+ * - 背景色切り替え
+ * - 作業中の画像再アップロード
  */
 
 class ChromaApp {
@@ -21,9 +22,10 @@ class ChromaApp {
         this.uploadSection = document.getElementById('upload-section');
         this.editorSection = document.getElementById('editor-section');
         
-        // Upload
+        // Upload (両方のファイル入力)
         this.dropzone = document.getElementById('dropzone');
         this.fileInput = document.getElementById('file-input');
+        this.fileInputEditor = document.getElementById('file-input-editor');
         
         // Viewport
         this.viewport = document.getElementById('image-viewport');
@@ -36,6 +38,8 @@ class ChromaApp {
         // Toolbar
         this.zoomLevelEl = document.getElementById('zoom-level');
         this.modeBtns = document.querySelectorAll('.mode-btn');
+        this.bgBtns = document.querySelectorAll('.bg-btn');
+        this.bgColorPicker = document.getElementById('bg-color-picker');
         
         // Status
         this.statusFilename = document.getElementById('status-filename');
@@ -50,6 +54,7 @@ class ChromaApp {
         this.colorSelect = document.getElementById('color-select');
         this.colorCustom = document.getElementById('color-custom');
         this.colorPreview = document.getElementById('color-preview');
+        this.chromaColorPicker = document.getElementById('chroma-color-picker');
         this.toleranceSlider = document.getElementById('tolerance');
         this.featherSlider = document.getElementById('feather');
         this.despillSlider = document.getElementById('despill');
@@ -75,7 +80,8 @@ class ChromaApp {
         this.panX = 0;
         this.panY = 0;
         this.viewMode = 'compare'; // 'compare' | 'original' | 'preview'
-        this.sliderPosition = 0.5; // 0.0 - 1.0 (viewport基準)
+        this.sliderRatio = 0.5; // 0.0 - 1.0 (viewport比率)
+        this.bgMode = 'checker'; // 'checker' | 'white' | 'black' | 'custom'
         
         // Interaction state
         this.isDragging = false;
@@ -113,7 +119,7 @@ class ChromaApp {
     }
 
     bindEvents() {
-        // File input
+        // File input (初期画面)
         this.dropzone.addEventListener('click', (e) => {
             if (e.target.tagName !== 'LABEL') this.fileInput.click();
         });
@@ -121,6 +127,9 @@ class ChromaApp {
         this.dropzone.addEventListener('dragleave', () => this.dropzone.classList.remove('dragover'));
         this.dropzone.addEventListener('drop', (e) => this.handleDrop(e));
         this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
+        
+        // File input (エディタ画面)
+        this.fileInputEditor.addEventListener('change', (e) => this.handleFileSelect(e));
         
         // Viewport - Zoom (wheel)
         this.viewport.addEventListener('wheel', (e) => this.handleWheel(e), { passive: false });
@@ -140,11 +149,24 @@ class ChromaApp {
         document.getElementById('btn-zoom-100').addEventListener('click', () => this.zoomTo(1));
         document.getElementById('btn-reset-view').addEventListener('click', () => this.resetView());
         document.getElementById('btn-fullscreen').addEventListener('click', () => this.toggleFullscreen());
-        document.getElementById('btn-new-image').addEventListener('click', () => this.fileInput.click());
         
         // Mode buttons
         this.modeBtns.forEach(btn => {
             btn.addEventListener('click', () => this.setViewMode(btn.dataset.mode));
+        });
+        
+        // Background buttons
+        this.bgBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (btn.dataset.bg === 'custom') {
+                    this.bgColorPicker.click();
+                } else {
+                    this.setBgMode(btn.dataset.bg);
+                }
+            });
+        });
+        this.bgColorPicker.addEventListener('input', (e) => {
+            this.setBgMode('custom', e.target.value);
         });
         
         // Panel resizer
@@ -156,6 +178,15 @@ class ChromaApp {
         // Controls
         this.colorSelect.addEventListener('change', () => this.handleColorChange());
         this.colorCustom.addEventListener('input', () => this.handleColorChange());
+        
+        // Chroma color picker
+        this.chromaColorPicker.addEventListener('input', (e) => {
+            this.colorSelect.value = 'custom';
+            this.colorCustom.value = e.target.value;
+            this.colorCustom.hidden = false;
+            this.updateColorPreview();
+            this.schedulePreview();
+        });
         
         const sliders = [this.toleranceSlider, this.featherSlider, this.despillSlider, 
                         this.erodeSlider, this.dilateSlider];
@@ -172,6 +203,19 @@ class ChromaApp {
         
         // Window resize
         window.addEventListener('resize', () => this.updateCompareView());
+        
+        // Viewport drag & drop (エディタ画面でも画像をドロップ可能)
+        this.viewport.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+        this.viewport.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.dataTransfer.files.length > 0) {
+                this.loadFile(e.dataTransfer.files[0]);
+            }
+        });
     }
 
     async loadConfig() {
@@ -183,6 +227,7 @@ class ChromaApp {
             console.warn('Failed to load config:', e);
         }
         this.updateColorPreview();
+        this.setBgMode('checker');
     }
 
     // === File Handling ===
@@ -205,6 +250,7 @@ class ChromaApp {
     handleFileSelect(e) {
         if (e.target.files.length > 0) {
             this.loadFile(e.target.files[0]);
+            e.target.value = ''; // リセットして同じファイルも選択可能に
         }
     }
 
@@ -233,7 +279,7 @@ class ChromaApp {
         // Resize for preview API call
         this.resizedBlob = await this.resizeImage(file, 512);
         
-        // Set preview image with same size as original (will be scaled by CSS)
+        // Set preview image with same size as original
         this.previewImage.style.width = this.imageWidth + 'px';
         this.previewImage.style.height = this.imageHeight + 'px';
         
@@ -248,6 +294,9 @@ class ChromaApp {
         // Update status
         this.statusFilename.textContent = file.name;
         this.statusDimensions.textContent = `${this.imageWidth} × ${this.imageHeight}`;
+        
+        // Reset slider position
+        this.sliderRatio = 0.5;
         
         // Fit to view and update preview
         requestAnimationFrame(() => {
@@ -282,6 +331,38 @@ class ChromaApp {
         });
     }
 
+    // === Background Mode ===
+    
+    setBgMode(mode, customColor = null) {
+        this.bgMode = mode;
+        
+        // Update buttons
+        this.bgBtns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.bg === mode);
+        });
+        
+        // Update viewport class
+        this.viewport.classList.remove('bg-checker', 'bg-white', 'bg-black');
+        
+        if (mode === 'checker') {
+            this.viewport.classList.add('bg-checker');
+            this.viewport.style.backgroundColor = '';
+        } else if (mode === 'white') {
+            this.viewport.classList.add('bg-white');
+            this.viewport.style.backgroundColor = '';
+        } else if (mode === 'black') {
+            this.viewport.classList.add('bg-black');
+            this.viewport.style.backgroundColor = '';
+        } else if (mode === 'custom') {
+            const color = customColor || this.bgColorPicker.value;
+            this.viewport.style.backgroundColor = color;
+            // custom button を active に
+            this.bgBtns.forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.bg === 'custom');
+            });
+        }
+    }
+
     // === Zoom & Pan ===
 
     handleWheel(e) {
@@ -305,7 +386,7 @@ class ChromaApp {
     }
 
     handleViewportPointerDown(e) {
-        // スライダーをクリックした場合は無視（スライダー専用ハンドラで処理）
+        // スライダーをクリックした場合は無視
         if (e.target.closest('.compare-slider')) {
             return;
         }
@@ -330,7 +411,7 @@ class ChromaApp {
 
     handlePointerMove(e) {
         // ステータス更新（座標表示）
-        if (this.imageWidth > 0) {
+        if (this.imageWidth > 0 && this.viewport) {
             this.updateStatusPosition(e);
         }
         
@@ -362,7 +443,7 @@ class ChromaApp {
     updateSliderFromEvent(e) {
         const rect = this.viewport.getBoundingClientRect();
         const x = e.clientX - rect.left;
-        this.sliderPosition = Math.max(0, Math.min(1, x / rect.width));
+        this.sliderRatio = Math.max(0, Math.min(1, x / rect.width));
         this.updateCompareView();
     }
 
@@ -424,7 +505,7 @@ class ChromaApp {
 
     resetView() {
         this.zoomToFit();
-        this.sliderPosition = 0.5;
+        this.sliderRatio = 0.5;
         this.updateCompareView();
     }
 
@@ -436,40 +517,49 @@ class ChromaApp {
 
     /**
      * 比較ビューを更新
-     * - スライダーは画面に固定（画像とは独立）
-     * - プレビュー画像はスライダー位置でクリップ
+     * - スライダーは画面に固定
+     * - プレビュー画像は画像座標でクリップ
      */
     updateCompareView() {
         const rect = this.viewport.getBoundingClientRect();
         
         if (this.viewMode === 'compare') {
-            // スライダー位置（画面座標）
-            const sliderX = rect.width * this.sliderPosition;
+            // スライダー位置（画面座標 px）
+            const sliderScreenX = rect.width * this.sliderRatio;
             
             // スライダーを画面に固定表示
-            this.compareSlider.style.left = sliderX + 'px';
+            this.compareSlider.style.left = sliderScreenX + 'px';
             this.compareSlider.style.display = 'block';
             
-            // プレビュー画像のクリップ（画面座標基準でパーセント指定）
-            // clip-path: inset(top right bottom left)
-            // スライダーより右側だけを表示するため、左からクリップ
-            const clipLeft = this.sliderPosition * 100;
-            this.previewImage.style.clipPath = `inset(0 0 0 ${clipLeft}%)`;
+            // 画像座標でのスライダー位置を計算
+            // 画面座標 → 画像座標への変換
+            const sliderImageX = (sliderScreenX - this.panX) / this.zoom;
+            
+            // 元画像: スライダーより左側のみ表示
+            // clip-path: inset(top right bottom left) - 右からクリップ
+            const originalClipRight = Math.max(0, this.imageWidth - sliderImageX);
+            this.originalImage.style.clipPath = `inset(0 ${originalClipRight}px 0 0)`;
+            
+            // プレビュー画像: スライダーより右側のみ表示
+            // clip-path: inset(top right bottom left) - 左からクリップ
+            const previewClipLeft = Math.max(0, sliderImageX);
+            this.previewImage.style.clipPath = `inset(0 0 0 ${previewClipLeft}px)`;
             
             // 両方の画像を表示
-            this.originalImage.style.opacity = '1';
-            this.previewImage.style.opacity = '1';
+            this.originalImage.style.visibility = 'visible';
+            this.previewImage.style.visibility = 'visible';
         } else {
             // 単独表示モード
             this.compareSlider.style.display = 'none';
+            this.originalImage.style.clipPath = 'none';
             this.previewImage.style.clipPath = 'none';
             
             if (this.viewMode === 'original') {
-                this.originalImage.style.opacity = '1';
-                this.previewImage.style.opacity = '0';
+                this.originalImage.style.visibility = 'visible';
+                this.previewImage.style.visibility = 'hidden';
             } else {
-                this.originalImage.style.opacity = '0';
-                this.previewImage.style.opacity = '1';
+                this.originalImage.style.visibility = 'hidden';
+                this.previewImage.style.visibility = 'visible';
             }
         }
     }
@@ -567,7 +657,9 @@ class ChromaApp {
 
     updateColorPreview() {
         const color = this.getColor();
-        this.colorPreview.style.backgroundColor = this.colorMap[color] || color;
+        const hex = this.colorMap[color] || color;
+        this.colorPreview.style.backgroundColor = hex;
+        this.chromaColorPicker.value = hex.startsWith('#') ? hex : this.colorMap[color] || '#00ff00';
     }
 
     updateSliderValue(slider) {

@@ -56,6 +56,9 @@
     --header-height: 48px;
     --footer-height: 32px;
     --params-panel-height: 160px;
+    
+    /* Viewport background */
+    --viewport-bg: transparent;
 }
 
 /* === Reset & Base === */
@@ -282,6 +285,7 @@ main {
     justify-content: space-between;
     padding: 0 var(--space-sm);
     flex-shrink: 0;
+    gap: var(--space-sm);
 }
 
 .toolbar-left,
@@ -292,7 +296,12 @@ main {
     gap: var(--space-xs);
 }
 
-.tool-btn {
+.toolbar-center {
+    gap: var(--space-md);
+}
+
+.tool-btn,
+.upload-btn {
     width: 32px;
     height: 32px;
     display: flex;
@@ -335,14 +344,16 @@ main {
     padding: 0 var(--space-xs);
 }
 
-.view-mode-switch {
+.view-mode-switch,
+.bg-mode-switch {
     display: flex;
     background: var(--color-surface-elevated);
     border-radius: var(--radius-sm);
     padding: 2px;
 }
 
-.mode-btn {
+.mode-btn,
+.bg-btn {
     width: 30px;
     height: 26px;
     display: flex;
@@ -376,8 +387,15 @@ main {
     position: relative;
     overflow: hidden;
     cursor: grab;
+    background: var(--viewport-bg);
     
-    /* Checkerboard pattern for transparency */
+    &:active, &.dragging {
+        cursor: grabbing;
+    }
+}
+
+/* Checkerboard background (default) */
+.image-viewport.bg-checker {
     background-image: 
         linear-gradient(45deg, #1a1a24 25%, transparent 25%),
         linear-gradient(-45deg, #1a1a24 25%, transparent 25%),
@@ -386,14 +404,14 @@ main {
     background-size: 16px 16px;
     background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
     background-color: #12121a;
-    
-    &:active {
-        cursor: grabbing;
-    }
-    
-    &.dragging {
-        cursor: grabbing;
-    }
+}
+
+.image-viewport.bg-white {
+    background: #ffffff;
+}
+
+.image-viewport.bg-black {
+    background: #000000;
 }
 
 /* 画像コンテナ（ズーム/パン対象） */
@@ -422,7 +440,6 @@ main {
 
 .preview-image {
     z-index: 2;
-    /* clip-path will be set by JS */
 }
 
 /* ローディングオーバーレイ */
@@ -456,7 +473,6 @@ main {
     cursor: ew-resize;
     z-index: 100;
     box-shadow: 0 0 15px var(--color-accent-glow);
-    transform: translateX(-50%);
     /* left will be set by JS */
 }
 
@@ -644,13 +660,37 @@ input[type="range"] {
     }
 }
 
+/* カラープレビュー（クリックでピッカー） */
+.color-preview-wrapper {
+    position: relative;
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+}
+
 .color-preview {
     width: 28px;
     height: 28px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--color-border);
     background: #00ff00;
-    flex-shrink: 0;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    
+    &:hover {
+        border-color: var(--color-accent);
+        box-shadow: 0 0 10px var(--color-accent-glow);
+    }
+}
+
+.color-preview-wrapper input[type="color"] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
 }
 
 /* Action Buttons */
@@ -779,8 +819,8 @@ footer {
         grid-template-columns: 1fr 1fr;
     }
     
-    .view-toolbar {
-        .toolbar-center {
+    .toolbar-center {
+        .bg-mode-switch {
             display: none;
         }
     }
@@ -797,5 +837,9 @@ footer {
         .btn {
             width: 100%;
         }
+    }
+    
+    .toolbar-center {
+        display: none;
     }
 }

@@ -10,7 +10,19 @@ categories = ["command-line-utilities", "multimedia::images"]
 
 [features]
 default = []
-video = ["dep:serde_json", "dep:tempfile"]
+video = ["dep:tempfile"]
+server = [
+    "dep:warp",
+    "dep:tokio",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:sha2",
+    "dep:chrono",
+    "dep:futures",
+    "dep:bytes",
+    "dep:tempfile",
+]
+full = ["video", "server"]
 
 [dependencies]
 image = "0.25"
@@ -19,8 +31,17 @@ anyhow = "1"
 thiserror = "1"
 
 # 動画機能用の依存関係 (feature = "video")
-serde_json = { version = "1", optional = true }
 tempfile = { version = "3", optional = true }
+
+# サーバ機能用の依存関係 (feature = "server")
+warp = { version = "0.3", optional = true }
+tokio = { version = "1", features = ["full"], optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+sha2 = { version = "0.10", optional = true }
+chrono = { version = "0.4", optional = true }
+futures = { version = "0.3", optional = true }
+bytes = { version = "1", optional = true }
 
 # アロケータ (macOS, FreeBSD以外で使用)
 [target.'cfg(not(any(target_os = "macos", target_os = "freebsd")))'.dependencies]

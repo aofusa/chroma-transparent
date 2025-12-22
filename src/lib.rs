@@ -31,6 +31,9 @@ pub mod scanner;
 #[cfg(feature = "video")]
 pub mod video;
 
+#[cfg(feature = "server")]
+pub mod server;
+
 // 主要な型を再エクスポート
 pub use cli::Args;
 pub use color::Rgb;
@@ -44,4 +47,7 @@ pub use video::{
     detect_file_type, generate_video_output_path, FileType, Ffmpeg, VideoFormat,
     VideoProcessConfig, VideoProcessor,
 };
+
+#[cfg(feature = "server")]
+pub use server::{ServerConfig, StorageManager};
 

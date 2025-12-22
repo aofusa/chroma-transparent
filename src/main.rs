@@ -22,35 +22,62 @@ use chroma_transparent::{
     VideoProcessConfig, VideoProcessor,
 };
 
+#[cfg(feature = "server")]
 fn main() -> anyhow::Result<()> {
-    // 1. CLI引数をパース
+    // CLI引数をパース
     let args = Args::parse();
 
-    // 2. 入力パスの存在確認
+    // サーバモードの場合
+    if args.is_server_mode() {
+        let config = args.build_server_config();
+        
+        // tokioランタイムを起動
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(chroma_transparent::server::run(config))?;
+        
+        return Ok(());
+    }
+
+    // 通常のCLIモード
+    run_cli(args)
+}
+
+#[cfg(not(feature = "server"))]
+fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
+    run_cli(args)
+}
+
+/// CLIモードで実行
+fn run_cli(args: Args) -> anyhow::Result<()> {
+    // 入力パスの存在確認
     args.validate_input()?;
 
-    // 3. 設定を構築
+    // 入力パスを取得
+    let input = args.input_path()?;
+
+    // 設定を構築
     let config = ProcessConfig::from_cli(&args)?;
     config.validate()?;
 
-    // 4. 入力の種類を判定して処理
+    // 入力の種類を判定して処理
     #[cfg(feature = "video")]
     {
-        let file_type = detect_file_type(&args.input);
+        let file_type = detect_file_type(input);
 
         match file_type {
             FileType::Directory => process_directory(&args, &config)?,
             FileType::Image => process_single_image(&args, &config)?,
             FileType::Video => process_video(&args, &config)?,
             FileType::Unknown => {
-                anyhow::bail!("Unknown file type: {:?}", args.input);
+                anyhow::bail!("Unknown file type: {:?}", input);
             }
         }
     }
 
     #[cfg(not(feature = "video"))]
     {
-        if args.input.is_dir() {
+        if input.is_dir() {
             process_directory(&args, &config)?;
         } else {
             process_single_image(&args, &config)?;
@@ -62,7 +89,7 @@ fn main() -> anyhow::Result<()> {
 
 /// 単一画像ファイルを処理
 fn process_single_image(args: &Args, config: &ProcessConfig) -> anyhow::Result<()> {
-    let input_path = &args.input;
+    let input_path = args.input_path()?;
     let output_path = args.output_path_for_file(input_path);
 
     if config.verbose {
@@ -105,7 +132,7 @@ fn process_single_image(args: &Args, config: &ProcessConfig) -> anyhow::Result<(
 /// 動画ファイルを処理
 #[cfg(feature = "video")]
 fn process_video(args: &Args, config: &ProcessConfig) -> anyhow::Result<()> {
-    let input_path = &args.input;
+    let input_path = args.input_path()?;
 
     // 出力フォーマットを決定
     let video_format = if let Some(format_str) = &args.video_format {
@@ -183,7 +210,7 @@ fn process_video(args: &Args, config: &ProcessConfig) -> anyhow::Result<()> {
 
 /// ディレクトリ内のすべての画像を処理
 fn process_directory(args: &Args, config: &ProcessConfig) -> anyhow::Result<()> {
-    let input_dir = &args.input;
+    let input_dir = args.input_path()?;
 
     if config.verbose {
         eprintln!("Input directory: {:?}", input_dir);

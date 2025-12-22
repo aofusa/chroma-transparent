@@ -19,6 +19,7 @@
 - **ディレクトリ一括処理**: ディレクトリ内の全画像ファイルを一括処理
 - **再帰的探索**: サブディレクトリも含めて処理（深さ指定可能）
 - **動画対応** (feature: `video`): ffmpegを使用してMP4, WebM, MOV等の動画を透過動画（WebM/MOV）に変換
+- **Webサーバモード** (feature: `server`): ブラウザからGUIで操作、REST API提供、OpenAPI対応
 
 ## インストール
 
@@ -336,6 +337,54 @@ fn main() -> anyhow::Result<()> {
 | MOV (ProRes 4444) | 高品質アルファ動画 | プロ向け編集ソフト |
 | PNG連番 | 各フレームをPNGファイルとして出力 | 後処理、編集 |
 
+## Webサーバモード（feature: `server`）
+
+`--features server` でビルドすると、Webサーバモードが利用可能になります。
+
+### サーバの起動
+
+```bash
+# ビルド
+cargo build --release --features server
+
+# 起動
+chroma-transparent --serve
+
+# ポートとストレージを指定
+chroma-transparent --serve --port 3000 --storage-dir ./output
+
+# 動画処理も有効化（fullビルド時）
+chroma-transparent --serve --enable-video
+```
+
+### Web UI
+
+ブラウザで `http://localhost:8080` にアクセスすると、Web UIが表示されます。
+
+- 画像をドラッグ＆ドロップでアップロード
+- スライダーでパラメータをリアルタイム調整
+- プレビューを確認しながら設定
+- 処理してダウンロード
+
+### REST API
+
+| Method | Endpoint | 説明 |
+|--------|----------|------|
+| GET | `/api/health` | ヘルスチェック |
+| GET | `/api/config` | パラメータ設定取得 |
+| GET | `/api/docs` | Swagger UI |
+| GET | `/api/openapi.json` | OpenAPIスキーマ |
+| POST | `/api/preview` | プレビュー生成 |
+| POST | `/api/process` | フル画像処理 |
+| GET | `/api/download/{id}` | ファイルダウンロード |
+| DELETE | `/api/files/{id}` | ファイル削除 |
+
+### ストレージ
+
+- デフォルト: 一時ディレクトリ（サーバ停止時に自動削除）
+- `--storage-dir` 指定時: 指定ディレクトリに永続保存
+- ファイル名形式: `YYYYMMDD_HHMMSS_hash8.png`
+
 ## 動作要件
 
 - Rust 1.70 以上
@@ -346,6 +395,8 @@ fn main() -> anyhow::Result<()> {
 | Feature | 説明 | デフォルト |
 |---------|------|----------|
 | `video` | 動画処理機能（ffmpeg連携） | 無効 |
+| `server` | Webサーバモード（REST API + GUI） | 無効 |
+| `full` | `video` + `server` | 無効 |
 
 ## ライセンス
 

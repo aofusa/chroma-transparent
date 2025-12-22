@@ -1,6 +1,11 @@
 /**
  * chroma-transparent Web UI
  * Advanced Compare View with Zoom/Pan/Slider
+ * 
+ * 修正済み:
+ * - 元画像とプレビュー画像のサイズを統一
+ * - スライダーを画面に固定（画像と一緒に動かない）
+ * - 正しい左右分割表示
  */
 
 class ChromaApp {
@@ -23,8 +28,6 @@ class ChromaApp {
         // Viewport
         this.viewport = document.getElementById('image-viewport');
         this.container = document.getElementById('image-container');
-        this.originalLayer = document.getElementById('original-layer');
-        this.previewLayer = document.getElementById('preview-layer');
         this.originalImage = document.getElementById('original-image');
         this.previewImage = document.getElementById('preview-image');
         this.loadingOverlay = document.getElementById('loading-overlay');
@@ -72,7 +75,7 @@ class ChromaApp {
         this.panX = 0;
         this.panY = 0;
         this.viewMode = 'compare'; // 'compare' | 'original' | 'preview'
-        this.sliderPosition = 0.5; // 0.0 - 1.0
+        this.sliderPosition = 0.5; // 0.0 - 1.0 (viewport基準)
         
         // Interaction state
         this.isDragging = false;
@@ -82,7 +85,6 @@ class ChromaApp {
         this.dragStartY = 0;
         this.panStartX = 0;
         this.panStartY = 0;
-        this.spacePressed = false;
         
         // Debounce
         this.debounceTimer = null;
@@ -120,16 +122,16 @@ class ChromaApp {
         this.dropzone.addEventListener('drop', (e) => this.handleDrop(e));
         this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
         
-        // Viewport - Zoom
+        // Viewport - Zoom (wheel)
         this.viewport.addEventListener('wheel', (e) => this.handleWheel(e), { passive: false });
         
-        // Viewport - Pan
-        this.viewport.addEventListener('pointerdown', (e) => this.handlePointerDown(e));
+        // Viewport - Pan (pointer)
+        this.viewport.addEventListener('pointerdown', (e) => this.handleViewportPointerDown(e));
         document.addEventListener('pointermove', (e) => this.handlePointerMove(e));
         document.addEventListener('pointerup', (e) => this.handlePointerUp(e));
         
-        // Compare slider
-        this.compareSlider.addEventListener('pointerdown', (e) => this.handleSliderDown(e));
+        // Compare slider (separate handler)
+        this.compareSlider.addEventListener('pointerdown', (e) => this.handleSliderPointerDown(e));
         
         // Toolbar buttons
         document.getElementById('btn-zoom-out').addEventListener('click', () => this.zoomBy(-0.25));
@@ -150,7 +152,6 @@ class ChromaApp {
         
         // Keyboard
         document.addEventListener('keydown', (e) => this.handleKeyDown(e));
-        document.addEventListener('keyup', (e) => this.handleKeyUp(e));
         
         // Controls
         this.colorSelect.addEventListener('change', () => this.handleColorChange());
@@ -170,7 +171,7 @@ class ChromaApp {
         this.processBtn.addEventListener('click', () => this.processAndDownload());
         
         // Window resize
-        window.addEventListener('resize', () => this.updateLayout());
+        window.addEventListener('resize', () => this.updateCompareView());
     }
 
     async loadConfig() {
@@ -224,11 +225,21 @@ class ChromaApp {
         this.imageWidth = img.naturalWidth;
         this.imageHeight = img.naturalHeight;
         
-        // Set original image
+        // Set original image with explicit size
         this.originalImage.src = img.src;
+        this.originalImage.style.width = this.imageWidth + 'px';
+        this.originalImage.style.height = this.imageHeight + 'px';
         
-        // Resize for preview
+        // Resize for preview API call
         this.resizedBlob = await this.resizeImage(file, 512);
+        
+        // Set preview image with same size as original (will be scaled by CSS)
+        this.previewImage.style.width = this.imageWidth + 'px';
+        this.previewImage.style.height = this.imageHeight + 'px';
+        
+        // Set container size
+        this.container.style.width = this.imageWidth + 'px';
+        this.container.style.height = this.imageHeight + 'px';
         
         // Switch to editor
         this.uploadSection.hidden = true;
@@ -238,7 +249,7 @@ class ChromaApp {
         this.statusFilename.textContent = file.name;
         this.statusDimensions.textContent = `${this.imageWidth} × ${this.imageHeight}`;
         
-        // Fit to view
+        // Fit to view and update preview
         requestAnimationFrame(() => {
             this.zoomToFit();
             this.updatePreview();
@@ -285,7 +296,6 @@ class ChromaApp {
         const newZoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoom * (1 + delta)));
         
         if (newZoom !== this.zoom) {
-            // Adjust pan to zoom centered on mouse
             const zoomRatio = newZoom / this.zoom;
             this.panX = mouseX - (mouseX - this.panX) * zoomRatio;
             this.panY = mouseY - (mouseY - this.panY) * zoomRatio;
@@ -294,50 +304,66 @@ class ChromaApp {
         }
     }
 
-    handlePointerDown(e) {
-        if (e.target.closest('.compare-slider')) return;
+    handleViewportPointerDown(e) {
+        // スライダーをクリックした場合は無視（スライダー専用ハンドラで処理）
+        if (e.target.closest('.compare-slider')) {
+            return;
+        }
         
+        e.preventDefault();
         this.isDragging = true;
         this.dragStartX = e.clientX;
         this.dragStartY = e.clientY;
         this.panStartX = this.panX;
         this.panStartY = this.panY;
+        this.viewport.classList.add('dragging');
         this.viewport.setPointerCapture(e.pointerId);
     }
 
-    handlePointerMove(e) {
-        if (this.isDragging) {
-            const dx = e.clientX - this.dragStartX;
-            const dy = e.clientY - this.dragStartY;
-            this.panX = this.panStartX + dx;
-            this.panY = this.panStartY + dy;
-            this.updateTransform();
-            this.updateStatusPosition(e);
-        } else if (this.isSliderDragging) {
-            this.updateSliderFromEvent(e);
-        } else if (this.isPanelResizing) {
-            this.updatePanelHeight(e);
-        }
-    }
-
-    handlePointerUp(e) {
-        this.isDragging = false;
-        this.isSliderDragging = false;
-        this.isPanelResizing = false;
-    }
-
-    handleSliderDown(e) {
+    handleSliderPointerDown(e) {
+        e.preventDefault();
         e.stopPropagation();
         this.isSliderDragging = true;
         this.compareSlider.setPointerCapture(e.pointerId);
         this.updateSliderFromEvent(e);
     }
 
+    handlePointerMove(e) {
+        // ステータス更新（座標表示）
+        if (this.imageWidth > 0) {
+            this.updateStatusPosition(e);
+        }
+        
+        if (this.isDragging) {
+            // 画像をドラッグ中
+            const dx = e.clientX - this.dragStartX;
+            const dy = e.clientY - this.dragStartY;
+            this.panX = this.panStartX + dx;
+            this.panY = this.panStartY + dy;
+            this.updateTransform();
+        } else if (this.isSliderDragging) {
+            // スライダーをドラッグ中
+            this.updateSliderFromEvent(e);
+        } else if (this.isPanelResizing) {
+            // パネルリサイズ中
+            this.updatePanelHeight(e);
+        }
+    }
+
+    handlePointerUp(e) {
+        if (this.isDragging) {
+            this.viewport.classList.remove('dragging');
+        }
+        this.isDragging = false;
+        this.isSliderDragging = false;
+        this.isPanelResizing = false;
+    }
+
     updateSliderFromEvent(e) {
         const rect = this.viewport.getBoundingClientRect();
         const x = e.clientX - rect.left;
         this.sliderPosition = Math.max(0, Math.min(1, x / rect.width));
-        this.updateCompareClip();
+        this.updateCompareView();
     }
 
     handleResizerDown(e) {
@@ -399,49 +425,52 @@ class ChromaApp {
     resetView() {
         this.zoomToFit();
         this.sliderPosition = 0.5;
-        this.updateCompareClip();
+        this.updateCompareView();
     }
 
     updateTransform() {
         this.container.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.zoom})`;
         this.zoomLevelEl.textContent = Math.round(this.zoom * 100) + '%';
-        this.updateCompareClip();
+        this.updateCompareView();
     }
 
-    updateCompareClip() {
+    /**
+     * 比較ビューを更新
+     * - スライダーは画面に固定（画像とは独立）
+     * - プレビュー画像はスライダー位置でクリップ
+     */
+    updateCompareView() {
+        const rect = this.viewport.getBoundingClientRect();
+        
         if (this.viewMode === 'compare') {
-            const rect = this.viewport.getBoundingClientRect();
+            // スライダー位置（画面座標）
             const sliderX = rect.width * this.sliderPosition;
             
-            // Position the slider
+            // スライダーを画面に固定表示
             this.compareSlider.style.left = sliderX + 'px';
             this.compareSlider.style.display = 'block';
             
-            // Clip the preview layer to the right of the slider
-            // Convert screen position to image coordinates
-            const imageX = (sliderX - this.panX) / this.zoom;
-            this.previewLayer.style.clipPath = `inset(0 0 0 ${imageX}px)`;
+            // プレビュー画像のクリップ（画面座標基準でパーセント指定）
+            // clip-path: inset(top right bottom left)
+            // スライダーより右側だけを表示するため、左からクリップ
+            const clipLeft = this.sliderPosition * 100;
+            this.previewImage.style.clipPath = `inset(0 0 0 ${clipLeft}%)`;
             
-            // Show both layers
-            this.originalLayer.style.opacity = '1';
-            this.previewLayer.style.opacity = '1';
+            // 両方の画像を表示
+            this.originalImage.style.opacity = '1';
+            this.previewImage.style.opacity = '1';
         } else {
+            // 単独表示モード
             this.compareSlider.style.display = 'none';
-            this.previewLayer.style.clipPath = 'none';
+            this.previewImage.style.clipPath = 'none';
             
             if (this.viewMode === 'original') {
-                this.originalLayer.style.opacity = '1';
-                this.previewLayer.style.opacity = '0';
+                this.originalImage.style.opacity = '1';
+                this.previewImage.style.opacity = '0';
             } else {
-                this.originalLayer.style.opacity = '0';
-                this.previewLayer.style.opacity = '1';
+                this.originalImage.style.opacity = '0';
+                this.previewImage.style.opacity = '1';
             }
-        }
-    }
-
-    updateLayout() {
-        if (this.imageWidth) {
-            this.updateCompareClip();
         }
     }
 
@@ -452,6 +481,8 @@ class ChromaApp {
         
         if (x >= 0 && x < this.imageWidth && y >= 0 && y < this.imageHeight) {
             this.statusPosition.textContent = `${x}, ${y}`;
+        } else {
+            this.statusPosition.textContent = '-';
         }
     }
 
@@ -462,7 +493,7 @@ class ChromaApp {
         this.modeBtns.forEach(btn => {
             btn.classList.toggle('active', btn.dataset.mode === mode);
         });
-        this.updateCompareClip();
+        this.updateCompareView();
     }
 
     toggleFullscreen() {
@@ -506,20 +537,9 @@ class ChromaApp {
             case 'F':
                 this.toggleFullscreen();
                 break;
-            case ' ':
-                this.spacePressed = true;
-                this.viewport.classList.add('space-drag');
-                break;
             case 'Enter':
                 this.processAndDownload();
                 break;
-        }
-    }
-
-    handleKeyUp(e) {
-        if (e.key === ' ') {
-            this.spacePressed = false;
-            this.viewport.classList.remove('space-drag');
         }
     }
 

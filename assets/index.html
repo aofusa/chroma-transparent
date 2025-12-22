@@ -103,27 +103,27 @@
 
                     <!-- 画像表示エリア -->
                     <div class="image-viewport" id="image-viewport">
+                        <!-- 画像コンテナ（ズーム/パン対象） -->
                         <div class="image-container" id="image-container">
-                            <!-- 元画像レイヤー -->
-                            <div class="image-layer original-layer" id="original-layer">
-                                <img id="original-image" alt="Original">
-                            </div>
-                            <!-- 処理後画像レイヤー -->
-                            <div class="image-layer preview-layer" id="preview-layer">
-                                <img id="preview-image" alt="Preview">
-                                <div class="loading-overlay" id="loading-overlay" hidden>
-                                    <div class="spinner"></div>
-                                </div>
-                            </div>
-                            <!-- 比較スライダー -->
-                            <div class="compare-slider" id="compare-slider">
-                                <div class="slider-line"></div>
-                                <div class="slider-handle">
-                                    <svg viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M8 5l-5 7 5 7V5z"/>
-                                        <path d="M16 5l5 7-5 7V5z"/>
-                                    </svg>
-                                </div>
+                            <!-- 元画像 -->
+                            <img class="layer-image original-image" id="original-image" alt="Original">
+                            <!-- 処理後画像 -->
+                            <img class="layer-image preview-image" id="preview-image" alt="Preview">
+                        </div>
+                        
+                        <!-- ローディングオーバーレイ -->
+                        <div class="loading-overlay" id="loading-overlay" hidden>
+                            <div class="spinner"></div>
+                        </div>
+                        
+                        <!-- 比較スライダー（viewport固定） -->
+                        <div class="compare-slider" id="compare-slider">
+                            <div class="slider-line"></div>
+                            <div class="slider-handle">
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M8 5l-5 7 5 7V5z"/>
+                                    <path d="M16 5l5 7-5 7V5z"/>
+                                </svg>
                             </div>
                         </div>
                     </div>

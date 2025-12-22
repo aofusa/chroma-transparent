@@ -18,7 +18,7 @@
 - **柔軟なパラメータ調整**: すべての処理パラメータをコマンドラインから調整可能
 - **ディレクトリ一括処理**: ディレクトリ内の全画像ファイルを一括処理
 - **再帰的探索**: サブディレクトリも含めて処理（深さ指定可能）
-- **動画対応**: ffmpegを使用してMP4, WebM, MOV等の動画を透過動画（WebM/MOV）に変換
+- **動画対応** (feature: `video`): ffmpegを使用してMP4, WebM, MOV等の動画を透過動画（WebM/MOV）に変換
 
 ## インストール
 
@@ -32,10 +32,26 @@ cargo build --release
 
 ビルド後、実行ファイルは `target/release/chroma-transparent` に生成されます。
 
+### 動画機能を有効にしてビルド
+
+動画処理機能はオプションです。有効にするには `video` featureを指定してビルドします。
+
+```bash
+# 動画機能を有効にしてビルド
+cargo build --release --features video
+
+# 動画機能を有効にしてインストール
+cargo install --path . --features video
+```
+
 ### Cargoでインストール
 
 ```bash
+# 画像処理のみ（デフォルト）
 cargo install --path .
+
+# 動画処理も有効にする
+cargo install --path . --features video
 ```
 
 ## 使い方
@@ -75,9 +91,9 @@ chroma-transparent ./input_dir -o ./output_dir -r 0
 chroma-transparent input.png -o ./output_dir/
 ```
 
-### 動画の処理
+### 動画の処理（feature: `video`）
 
-動画ファイルを処理する場合は、システムにffmpegがインストールされている必要があります。
+動画ファイルを処理する場合は、`video` featureを有効にしてビルドし、システムにffmpegがインストールされている必要があります。
 
 ```bash
 # 動画を透過WebMに変換（デフォルト）
@@ -323,7 +339,13 @@ fn main() -> anyhow::Result<()> {
 ## 動作要件
 
 - Rust 1.70 以上
-- 動画処理を使用する場合: ffmpeg + ffprobe
+- 動画処理を使用する場合 (`--features video`): ffmpeg + ffprobe
+
+## Featureフラグ
+
+| Feature | 説明 | デフォルト |
+|---------|------|----------|
+| `video` | 動画処理機能（ffmpeg連携） | 無効 |
 
 ## ライセンス
 

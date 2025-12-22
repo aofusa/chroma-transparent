@@ -13,8 +13,12 @@ use std::path::Path;
 use clap::Parser;
 
 use chroma_transparent::{
-    detect_file_type, ensure_output_directory, generate_video_output_path, Args, ChromaError,
-    ChromaPipeline, Ffmpeg, FileType, ImageScanner, ProcessConfig, VideoFormat,
+    ensure_output_directory, Args, ChromaError, ChromaPipeline, ImageScanner, ProcessConfig,
+};
+
+#[cfg(feature = "video")]
+use chroma_transparent::{
+    detect_file_type, generate_video_output_path, FileType, Ffmpeg, VideoFormat,
     VideoProcessConfig, VideoProcessor,
 };
 
@@ -29,15 +33,27 @@ fn main() -> anyhow::Result<()> {
     let config = ProcessConfig::from_cli(&args)?;
     config.validate()?;
 
-    // 4. 入力の種類を判定
-    let file_type = detect_file_type(&args.input);
+    // 4. 入力の種類を判定して処理
+    #[cfg(feature = "video")]
+    {
+        let file_type = detect_file_type(&args.input);
 
-    match file_type {
-        FileType::Directory => process_directory(&args, &config)?,
-        FileType::Image => process_single_image(&args, &config)?,
-        FileType::Video => process_video(&args, &config)?,
-        FileType::Unknown => {
-            anyhow::bail!("Unknown file type: {:?}", args.input);
+        match file_type {
+            FileType::Directory => process_directory(&args, &config)?,
+            FileType::Image => process_single_image(&args, &config)?,
+            FileType::Video => process_video(&args, &config)?,
+            FileType::Unknown => {
+                anyhow::bail!("Unknown file type: {:?}", args.input);
+            }
+        }
+    }
+
+    #[cfg(not(feature = "video"))]
+    {
+        if args.input.is_dir() {
+            process_directory(&args, &config)?;
+        } else {
+            process_single_image(&args, &config)?;
         }
     }
 
@@ -87,6 +103,7 @@ fn process_single_image(args: &Args, config: &ProcessConfig) -> anyhow::Result<(
 }
 
 /// 動画ファイルを処理
+#[cfg(feature = "video")]
 fn process_video(args: &Args, config: &ProcessConfig) -> anyhow::Result<()> {
     let input_path = &args.input;
 

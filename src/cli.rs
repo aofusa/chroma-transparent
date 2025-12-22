@@ -10,7 +10,7 @@ use crate::error::{ChromaError, Result};
 #[command(name = "chroma-transparent")]
 #[command(version)]
 #[command(about = "指定した色をクロマキー処理して透過PNGに変換")]
-#[command(long_about = r#"
+#[cfg_attr(feature = "video", command(long_about = r#"
 指定した画像または動画の指定された色をクロマキー処理して透過ファイルに変換するCLIツールです。
 
 グリーンバック画像/動画やブルーバック画像/動画など、単色背景から
@@ -27,7 +27,23 @@ use crate::error::{ChromaError, Result};
   chroma-transparent video.mp4 -o output.webm
   chroma-transparent video.mp4 --video-format mov -o output.mov
   chroma-transparent ./input_dir -o ./output_dir -r 2
-"#)]
+"#))]
+#[cfg_attr(not(feature = "video"), command(long_about = r#"
+指定した画像の指定された色をクロマキー処理して透過PNGに変換するCLIツールです。
+
+グリーンバック画像やブルーバック画像など、単色背景の画像から
+被写体を切り抜いて透過PNGを生成できます。
+
+ファイルまたはディレクトリを入力として指定できます。
+
+色の指定にはHEXコード（00FF00）またはCSS色名（lime, green, blue等）が使用できます。
+
+例:
+  chroma-transparent photo.png
+  chroma-transparent photo.png -o result.png -c lime
+  chroma-transparent photo.png -c blue -t 0.4 -f 10 -d 0.9
+  chroma-transparent ./input_dir -o ./output_dir -r 2
+"#))]
 pub struct Args {
     /// 入力画像またはディレクトリのパス
     #[arg(value_name = "INPUT")]
@@ -67,18 +83,22 @@ pub struct Args {
     pub recursive: Option<u32>,
 
     /// 動画出力フォーマット [webm, mov, png-sequence]
+    #[cfg(feature = "video")]
     #[arg(long, value_name = "FORMAT")]
     pub video_format: Option<String>,
 
     /// 動画出力品質 (1-100)
+    #[cfg(feature = "video")]
     #[arg(long, default_value = "80", value_name = "QUALITY")]
     pub video_quality: u32,
 
     /// 動画出力フレームレート（省略時は入力と同じ）
+    #[cfg(feature = "video")]
     #[arg(long, value_name = "FPS")]
     pub fps: Option<f32>,
 
     /// ffmpegのパス
+    #[cfg(feature = "video")]
     #[arg(long, default_value = "ffmpeg", value_name = "PATH")]
     pub ffmpeg: PathBuf,
 
@@ -195,9 +215,13 @@ mod tests {
             erode: 0,
             dilate: 1,
             recursive: None,
+            #[cfg(feature = "video")]
             video_format: None,
+            #[cfg(feature = "video")]
             video_quality: 80,
+            #[cfg(feature = "video")]
             fps: None,
+            #[cfg(feature = "video")]
             ffmpeg: PathBuf::from("ffmpeg"),
             verbose: false,
         }

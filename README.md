@@ -501,14 +501,88 @@ static/
 ### ローカルで確認
 
 ```bash
-# Python の HTTP サーバーで配信
+# Python の HTTP サーバーで配信（Workerモード）
 python3 -m http.server 8000 --directory static
+
+# SharedArrayBufferモード（COOP/COEPヘッダー付き、最高速）
+python3 scripts/serve-with-coop-coep.py
+
+# ポート指定
+python3 scripts/serve-with-coop-coep.py -p 3000
+
+# 外部公開（LAN内の他デバイスからアクセス可能）
+python3 scripts/serve-with-coop-coep.py --public
 
 # または npx serve を使用
 npx serve static
 
 # ブラウザでアクセス
 # http://localhost:8000/
+```
+
+### 処理モードの自動選択
+
+WASM版は環境に応じて最適な処理モードを自動選択します：
+
+| モード | 条件 | パフォーマンス | 表示 |
+|--------|------|---------------|------|
+| **SharedArrayBuffer** | COOP/COEPヘッダーあり | 最高速（ゼロコピー） | `(SharedArrayBuffer)` |
+| **Worker** | Workerが利用可能 | 高速（UIブロックなし） | `(Worker)` |
+| **Direct** | file://など | 動作保証（UIブロックあり） | `(Direct)` |
+
+### ホスティング環境別の動作
+
+| ホスティング | 追加設定 | 使用モード |
+|-------------|---------|------------|
+| **GitHub Pages** | 不要 | Worker |
+| **Netlify** | `_headers`ファイル追加で高速化可能 | SharedArrayBuffer (設定時) |
+| **Vercel** | `vercel.json`設定で高速化可能 | SharedArrayBuffer (設定時) |
+| **ローカル** | `serve-with-coop-coep.py`使用 | SharedArrayBuffer |
+
+### Netlify で SharedArrayBuffer を有効化
+
+`static/_headers` ファイルを作成：
+
+```
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+```
+
+### Vercel で SharedArrayBuffer を有効化
+
+`vercel.json` を作成：
+
+```json
+{
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+        { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" }
+      ]
+    }
+  ]
+}
+```
+
+### serve-with-coop-coep.py オプション
+
+| オプション | 説明 | デフォルト |
+|-----------|------|----------|
+| `-p, --port PORT` | ポート番号 | 8080 |
+| `-H, --host HOST` | バインドするホストアドレス | 127.0.0.1 |
+| `-P, --public` | 外部公開モード（0.0.0.0にバインド） | - |
+| `-d, --directory DIR` | サーブするディレクトリ | static/ |
+
+```bash
+# 使用例
+python3 scripts/serve-with-coop-coep.py                    # localhost:8080
+python3 scripts/serve-with-coop-coep.py -p 3000            # localhost:3000
+python3 scripts/serve-with-coop-coep.py --public           # 0.0.0.0:8080（外部公開）
+python3 scripts/serve-with-coop-coep.py -P -p 3000         # 0.0.0.0:3000（外部公開）
+python3 scripts/serve-with-coop-coep.py -H 192.168.1.100   # 指定IPでバインド
 ```
 
 ### 特徴

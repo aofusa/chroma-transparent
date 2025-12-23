@@ -13,7 +13,8 @@ use tokio::sync::Mutex;
 use warp::multipart::FormData;
 use warp::Rejection;
 
-use crate::color::Rgb;
+use crate::color::{ColorSpace, Rgb};
+use crate::config::ColorConfig;
 use crate::pipeline::ChromaPipeline;
 use crate::ProcessConfig;
 
@@ -32,6 +33,32 @@ pub struct ProcessParams {
     pub erode: u32,
     pub dilate: u32,
     pub preview_size: Option<u32>,
+    
+    // 新規フィールド
+    pub multi_colors: Vec<String>, // "COLOR:TOLERANCE"形式の文字列
+    pub color_space: Option<String>,
+    
+    pub bilateral: Option<bool>,
+    pub bilateral_spatial_sigma: Option<f32>,
+    pub bilateral_color_sigma: Option<f32>,
+    pub bilateral_radius: Option<u32>,
+    
+    pub multiscale: Option<bool>,
+    pub multiscale_levels: Option<u32>,
+    pub multiscale_scale_factor: Option<f32>,
+    
+    pub edge_optimization: Option<bool>,
+    pub edge_threshold: Option<f32>,
+    pub edge_smoothness: Option<f32>,
+    
+    pub shadow_removal: Option<bool>,
+    pub shadow_threshold: Option<f32>,
+    pub shadow_removal_strength: Option<f32>,
+    
+    pub sharpen: Option<bool>,
+    pub sharpen_amount: Option<f32>,
+    pub sharpen_radius: Option<f32>,
+    pub sharpen_threshold: Option<f32>,
 }
 
 /// 処理レスポンス
@@ -68,6 +95,19 @@ pub struct ParameterRanges {
     pub despill: ParameterRange,
     pub erode: ParameterRange,
     pub dilate: ParameterRange,
+    pub color_space: Vec<String>,
+    pub bilateral_spatial_sigma: ParameterRange,
+    pub bilateral_color_sigma: ParameterRange,
+    pub bilateral_radius: ParameterRange,
+    pub multiscale_levels: ParameterRange,
+    pub multiscale_scale_factor: ParameterRange,
+    pub edge_threshold: ParameterRange,
+    pub edge_smoothness: ParameterRange,
+    pub shadow_threshold: ParameterRange,
+    pub shadow_removal_strength: ParameterRange,
+    pub sharpen_amount: ParameterRange,
+    pub sharpen_radius: ParameterRange,
+    pub sharpen_threshold: ParameterRange,
 }
 
 #[derive(Serialize)]
@@ -136,6 +176,79 @@ pub fn get_config(config: Arc<ServerConfig>) -> ConfigResponse {
                 max: 10.0,
                 default: 1.0,
                 step: 1.0,
+            },
+            color_space: vec!["hsv".to_string(), "lab".to_string(), "lch".to_string(), "yuv".to_string()],
+            bilateral_spatial_sigma: ParameterRange {
+                min: 1.0,
+                max: 20.0,
+                default: 5.0,
+                step: 0.1,
+            },
+            bilateral_color_sigma: ParameterRange {
+                min: 10.0,
+                max: 100.0,
+                default: 50.0,
+                step: 1.0,
+            },
+            bilateral_radius: ParameterRange {
+                min: 1.0,
+                max: 10.0,
+                default: 5.0,
+                step: 1.0,
+            },
+            multiscale_levels: ParameterRange {
+                min: 1.0,
+                max: 5.0,
+                default: 3.0,
+                step: 1.0,
+            },
+            multiscale_scale_factor: ParameterRange {
+                min: 0.25,
+                max: 0.75,
+                default: 0.5,
+                step: 0.05,
+            },
+            edge_threshold: ParameterRange {
+                min: 0.0,
+                max: 1.0,
+                default: 0.1,
+                step: 0.01,
+            },
+            edge_smoothness: ParameterRange {
+                min: 0.0,
+                max: 1.0,
+                default: 0.5,
+                step: 0.01,
+            },
+            shadow_threshold: ParameterRange {
+                min: 0.0,
+                max: 1.0,
+                default: 0.3,
+                step: 0.01,
+            },
+            shadow_removal_strength: ParameterRange {
+                min: 0.0,
+                max: 1.0,
+                default: 0.7,
+                step: 0.01,
+            },
+            sharpen_amount: ParameterRange {
+                min: 0.0,
+                max: 2.0,
+                default: 0.5,
+                step: 0.1,
+            },
+            sharpen_radius: ParameterRange {
+                min: 0.1,
+                max: 5.0,
+                default: 1.0,
+                step: 0.1,
+            },
+            sharpen_threshold: ParameterRange {
+                min: 0.0,
+                max: 1.0,
+                default: 0.0,
+                step: 0.01,
             },
         },
         video_enabled: config.video_enabled,
@@ -325,6 +438,25 @@ async fn parse_multipart_form(mut form: FormData) -> Result<ProcessParams, Rejec
         despill: 0.7,
         erode: 0,
         dilate: 1,
+        multi_colors: Vec::new(),
+        color_space: None,
+        bilateral: None,
+        bilateral_spatial_sigma: None,
+        bilateral_color_sigma: None,
+        bilateral_radius: None,
+        multiscale: None,
+        multiscale_levels: None,
+        multiscale_scale_factor: None,
+        edge_optimization: None,
+        edge_threshold: None,
+        edge_smoothness: None,
+        shadow_removal: None,
+        shadow_threshold: None,
+        shadow_removal_strength: None,
+        sharpen: None,
+        sharpen_amount: None,
+        sharpen_radius: None,
+        sharpen_threshold: None,
         ..Default::default()
     };
 
@@ -421,6 +553,41 @@ fn build_process_config(params: &ProcessParams, _config: &ServerConfig) -> Resul
     let chroma_color = Rgb::from_color_spec(&params.color)
         .map_err(|e| warp::reject::custom(ApiError::BadRequest(e.to_string())))?;
 
+    // 多色検出の設定
+    let multi_colors = if params.multi_colors.is_empty() {
+        None
+    } else {
+        Some(
+            params.multi_colors
+                .iter()
+                .map(|s| {
+                    let parts: Vec<&str> = s.split(':').collect();
+                    if parts.len() != 2 {
+                        return Err(warp::reject::custom(ApiError::BadRequest(
+                            format!("Invalid multi-color format: {}", s)
+                        )));
+                    }
+                    let color = Rgb::from_color_spec(parts[0])
+                        .map_err(|e| warp::reject::custom(ApiError::BadRequest(e.to_string())))?;
+                    let tolerance = parts[1]
+                        .parse::<f32>()
+                        .map_err(|_| warp::reject::custom(ApiError::BadRequest(
+                            format!("Invalid tolerance: {}", parts[1])
+                        )))?;
+                    Ok(ColorConfig { color, tolerance })
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        )
+    };
+
+    // 色空間の設定
+    let color_space = if let Some(ref cs) = params.color_space {
+        ColorSpace::from_str(cs)
+            .map_err(|e| warp::reject::custom(ApiError::BadRequest(e)))?
+    } else {
+        ColorSpace::Hsv
+    };
+
     Ok(ProcessConfig {
         chroma_color,
         tolerance: params.tolerance,
@@ -429,6 +596,31 @@ fn build_process_config(params: &ProcessParams, _config: &ServerConfig) -> Resul
         erode_iterations: params.erode,
         dilate_iterations: params.dilate,
         verbose: false,
+        
+        multi_colors,
+        color_space,
+        
+        bilateral_enabled: params.bilateral.unwrap_or(false),
+        bilateral_spatial_sigma: params.bilateral_spatial_sigma.unwrap_or(5.0),
+        bilateral_color_sigma: params.bilateral_color_sigma.unwrap_or(50.0),
+        bilateral_radius: params.bilateral_radius.unwrap_or(5),
+        
+        multiscale_enabled: params.multiscale.unwrap_or(false),
+        multiscale_levels: params.multiscale_levels.unwrap_or(3),
+        multiscale_scale_factor: params.multiscale_scale_factor.unwrap_or(0.5),
+        
+        edge_optimization_enabled: params.edge_optimization.unwrap_or(false),
+        edge_threshold: params.edge_threshold.unwrap_or(0.1),
+        edge_smoothness: params.edge_smoothness.unwrap_or(0.5),
+        
+        shadow_removal_enabled: params.shadow_removal.unwrap_or(false),
+        shadow_threshold: params.shadow_threshold.unwrap_or(0.3),
+        shadow_removal_strength: params.shadow_removal_strength.unwrap_or(0.7),
+        
+        sharpen_enabled: params.sharpen.unwrap_or(false),
+        sharpen_amount: params.sharpen_amount.unwrap_or(0.5),
+        sharpen_radius: params.sharpen_radius.unwrap_or(1.0),
+        sharpen_threshold: params.sharpen_threshold.unwrap_or(0.0),
     })
 }
 

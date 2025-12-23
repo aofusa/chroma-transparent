@@ -60,6 +60,39 @@ class ChromaApp {
         this.despillSlider = document.getElementById('despill');
         this.erodeSlider = document.getElementById('erode');
         this.dilateSlider = document.getElementById('dilate');
+        this.colorSpaceSelect = document.getElementById('color-space');
+        
+        // 新規コントロール
+        this.multiColorEnabled = document.getElementById('multi-color-enabled');
+        this.multiColorList = document.getElementById('multi-color-list');
+        this.btnAddColor = document.getElementById('btn-add-color');
+        
+        this.bilateralEnabled = document.getElementById('bilateral-enabled');
+        this.bilateralParams = document.getElementById('bilateral-params');
+        this.bilateralSpatialSigma = document.getElementById('bilateral-spatial-sigma');
+        this.bilateralColorSigma = document.getElementById('bilateral-color-sigma');
+        this.bilateralRadius = document.getElementById('bilateral-radius');
+        
+        this.multiscaleEnabled = document.getElementById('multiscale-enabled');
+        this.multiscaleParams = document.getElementById('multiscale-params');
+        this.multiscaleLevels = document.getElementById('multiscale-levels');
+        this.multiscaleScaleFactor = document.getElementById('multiscale-scale-factor');
+        
+        this.edgeOptimizationEnabled = document.getElementById('edge-optimization-enabled');
+        this.edgeOptimizationParams = document.getElementById('edge-optimization-params');
+        this.edgeThreshold = document.getElementById('edge-threshold');
+        this.edgeSmoothness = document.getElementById('edge-smoothness');
+        
+        this.shadowRemovalEnabled = document.getElementById('shadow-removal-enabled');
+        this.shadowRemovalParams = document.getElementById('shadow-removal-params');
+        this.shadowThreshold = document.getElementById('shadow-threshold');
+        this.shadowRemovalStrength = document.getElementById('shadow-removal-strength');
+        
+        this.sharpenEnabled = document.getElementById('sharpen-enabled');
+        this.sharpenParams = document.getElementById('sharpen-params');
+        this.sharpenAmount = document.getElementById('sharpen-amount');
+        this.sharpenRadius = document.getElementById('sharpen-radius');
+        this.sharpenThreshold = document.getElementById('sharpen-threshold');
         
         // Buttons
         this.resetBtn = document.getElementById('reset-btn');
@@ -191,6 +224,76 @@ class ChromaApp {
         const sliders = [this.toleranceSlider, this.featherSlider, this.despillSlider, 
                         this.erodeSlider, this.dilateSlider];
         sliders.forEach(slider => {
+            slider.addEventListener('input', () => {
+                this.updateSliderValue(slider);
+                this.schedulePreview();
+            });
+        });
+        
+        // 色空間選択
+        this.colorSpaceSelect.addEventListener('change', () => this.schedulePreview());
+        
+        // 多色検出
+        this.multiColorEnabled.addEventListener('change', (e) => {
+            this.multiColorList.hidden = !e.target.checked;
+            this.schedulePreview();
+        });
+        this.btnAddColor.addEventListener('click', () => this.addMultiColor());
+        
+        // バイラテラルフィルタ
+        this.bilateralEnabled.addEventListener('change', (e) => {
+            this.bilateralParams.hidden = !e.target.checked;
+            this.schedulePreview();
+        });
+        [this.bilateralSpatialSigma, this.bilateralColorSigma, this.bilateralRadius].forEach(slider => {
+            slider.addEventListener('input', () => {
+                this.updateSliderValue(slider);
+                this.schedulePreview();
+            });
+        });
+        
+        // マルチスケール処理
+        this.multiscaleEnabled.addEventListener('change', (e) => {
+            this.multiscaleParams.hidden = !e.target.checked;
+            this.schedulePreview();
+        });
+        [this.multiscaleLevels, this.multiscaleScaleFactor].forEach(slider => {
+            slider.addEventListener('input', () => {
+                this.updateSliderValue(slider);
+                this.schedulePreview();
+            });
+        });
+        
+        // マットエッジ最適化
+        this.edgeOptimizationEnabled.addEventListener('change', (e) => {
+            this.edgeOptimizationParams.hidden = !e.target.checked;
+            this.schedulePreview();
+        });
+        [this.edgeThreshold, this.edgeSmoothness].forEach(slider => {
+            slider.addEventListener('input', () => {
+                this.updateSliderValue(slider);
+                this.schedulePreview();
+            });
+        });
+        
+        // 影の処理
+        this.shadowRemovalEnabled.addEventListener('change', (e) => {
+            this.shadowRemovalParams.hidden = !e.target.checked;
+            this.schedulePreview();
+        });
+        [this.shadowThreshold, this.shadowRemovalStrength].forEach(slider => {
+            slider.addEventListener('input', () => {
+                this.updateSliderValue(slider);
+                this.schedulePreview();
+            });
+        });
+        
+        // エッジシャープニング
+        this.sharpenEnabled.addEventListener('change', (e) => {
+            this.sharpenParams.hidden = !e.target.checked;
+            this.schedulePreview();
+        });
+        [this.sharpenAmount, this.sharpenRadius, this.sharpenThreshold].forEach(slider => {
             slider.addEventListener('input', () => {
                 this.updateSliderValue(slider);
                 this.schedulePreview();
@@ -663,6 +766,7 @@ class ChromaApp {
     }
 
     updateSliderValue(slider) {
+        if (!slider) return;
         const valueSpan = document.getElementById(slider.id + '-value');
         if (valueSpan) {
             const value = parseFloat(slider.value);
@@ -693,6 +797,58 @@ class ChromaApp {
         formData.append('despill', this.despillSlider.value);
         formData.append('erode', this.erodeSlider.value);
         formData.append('dilate', this.dilateSlider.value);
+        
+        // 新規パラメータ
+        formData.append('color_space', this.colorSpaceSelect.value);
+        
+        // 多色検出
+        if (this.multiColorEnabled.checked) {
+            const multiColorItems = this.multiColorList.querySelectorAll('.multi-color-item');
+            multiColorItems.forEach(item => {
+                const colorInput = item.querySelector('.multi-color-color');
+                const toleranceInput = item.querySelector('.multi-color-tolerance');
+                if (colorInput && toleranceInput) {
+                    formData.append('multi_color', `${colorInput.value}:${toleranceInput.value}`);
+                }
+            });
+        }
+        
+        // バイラテラルフィルタ
+        if (this.bilateralEnabled.checked) {
+            formData.append('bilateral', 'true');
+            formData.append('bilateral_spatial_sigma', this.bilateralSpatialSigma.value);
+            formData.append('bilateral_color_sigma', this.bilateralColorSigma.value);
+            formData.append('bilateral_radius', this.bilateralRadius.value);
+        }
+        
+        // マルチスケール処理
+        if (this.multiscaleEnabled.checked) {
+            formData.append('multiscale', 'true');
+            formData.append('multiscale_levels', this.multiscaleLevels.value);
+            formData.append('multiscale_scale_factor', this.multiscaleScaleFactor.value);
+        }
+        
+        // マットエッジ最適化
+        if (this.edgeOptimizationEnabled.checked) {
+            formData.append('edge_optimization', 'true');
+            formData.append('edge_threshold', this.edgeThreshold.value);
+            formData.append('edge_smoothness', this.edgeSmoothness.value);
+        }
+        
+        // 影の処理
+        if (this.shadowRemovalEnabled.checked) {
+            formData.append('shadow_removal', 'true');
+            formData.append('shadow_threshold', this.shadowThreshold.value);
+            formData.append('shadow_removal_strength', this.shadowRemovalStrength.value);
+        }
+        
+        // エッジシャープニング
+        if (this.sharpenEnabled.checked) {
+            formData.append('sharpen', 'true');
+            formData.append('sharpen_amount', this.sharpenAmount.value);
+            formData.append('sharpen_radius', this.sharpenRadius.value);
+            formData.append('sharpen_threshold', this.sharpenThreshold.value);
+        }
 
         try {
             const res = await fetch('/api/preview', {
@@ -750,6 +906,52 @@ class ChromaApp {
         formData.append('despill', this.despillSlider.value);
         formData.append('erode', this.erodeSlider.value);
         formData.append('dilate', this.dilateSlider.value);
+        
+        // 新規パラメータ（updatePreviewと同じ処理）
+        formData.append('color_space', this.colorSpaceSelect.value);
+        
+        if (this.multiColorEnabled.checked) {
+            const multiColorItems = this.multiColorList.querySelectorAll('.multi-color-item');
+            multiColorItems.forEach(item => {
+                const colorInput = item.querySelector('.multi-color-color');
+                const toleranceInput = item.querySelector('.multi-color-tolerance');
+                if (colorInput && toleranceInput) {
+                    formData.append('multi_color', `${colorInput.value}:${toleranceInput.value}`);
+                }
+            });
+        }
+        
+        if (this.bilateralEnabled.checked) {
+            formData.append('bilateral', 'true');
+            formData.append('bilateral_spatial_sigma', this.bilateralSpatialSigma.value);
+            formData.append('bilateral_color_sigma', this.bilateralColorSigma.value);
+            formData.append('bilateral_radius', this.bilateralRadius.value);
+        }
+        
+        if (this.multiscaleEnabled.checked) {
+            formData.append('multiscale', 'true');
+            formData.append('multiscale_levels', this.multiscaleLevels.value);
+            formData.append('multiscale_scale_factor', this.multiscaleScaleFactor.value);
+        }
+        
+        if (this.edgeOptimizationEnabled.checked) {
+            formData.append('edge_optimization', 'true');
+            formData.append('edge_threshold', this.edgeThreshold.value);
+            formData.append('edge_smoothness', this.edgeSmoothness.value);
+        }
+        
+        if (this.shadowRemovalEnabled.checked) {
+            formData.append('shadow_removal', 'true');
+            formData.append('shadow_threshold', this.shadowThreshold.value);
+            formData.append('shadow_removal_strength', this.shadowRemovalStrength.value);
+        }
+        
+        if (this.sharpenEnabled.checked) {
+            formData.append('sharpen', 'true');
+            formData.append('sharpen_amount', this.sharpenAmount.value);
+            formData.append('sharpen_radius', this.sharpenRadius.value);
+            formData.append('sharpen_threshold', this.sharpenThreshold.value);
+        }
 
         try {
             const res = await fetch('/api/process', {

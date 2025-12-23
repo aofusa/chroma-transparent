@@ -15,7 +15,9 @@ use log::debug;
 use crate::config::ProcessConfig;
 use crate::processor::alpha::apply_alpha_inplace;
 use crate::processor::{
-    create_alpha_from_mask, create_chroma_mask, despill, dilate, erode, feather_alpha, sharpen,
+    bilateral_filter_alpha, create_alpha_from_mask, create_chroma_mask, create_multi_chroma_mask,
+    create_multiscale_mask, despill, dilate, erode, feather_alpha, optimize_edge, remove_shadows,
+    sharpen,
 };
 
 /// クロマキー処理パイプライン
@@ -36,10 +38,43 @@ impl ChromaPipeline {
         debug!("Processing started (optimized)...");
 
         // 1. クロマキーマスク生成（改善A, B, D, F適用）
-        let mask = create_chroma_mask(image, &self.config.chroma_color, self.config.tolerance);
+        let mask = if self.config.multiscale_enabled {
+            // マルチスケール処理
+            create_multiscale_mask(
+                image,
+                &self.config.chroma_color,
+                self.config.tolerance,
+                self.config.multiscale_levels,
+                self.config.multiscale_scale_factor,
+                self.config.color_space,
+            )
+        } else if let Some(ref multi_colors) = self.config.multi_colors {
+            // 多色検出
+            create_multi_chroma_mask(image, multi_colors, self.config.color_space)
+        } else {
+            // 単色検出（既存の処理）
+            create_chroma_mask(image, &self.config.chroma_color, self.config.tolerance, self.config.color_space)
+        };
         debug!("Mask generation completed");
 
-        // 2. モルフォロジー演算（改善A, C, D適用）
+        // 2. 影の処理（有効時）
+        let mask = if self.config.shadow_removal_enabled {
+            let result = remove_shadows(
+                &mask,
+                image,
+                self.config.shadow_threshold,
+                self.config.shadow_removal_strength,
+            );
+            debug!(
+                "Shadow removal completed (threshold={}, strength={})",
+                self.config.shadow_threshold, self.config.shadow_removal_strength
+            );
+            result
+        } else {
+            mask
+        };
+
+        // 3. モルフォロジー演算（改善A, C, D適用）
         let mask = if self.config.erode_iterations > 0 {
             let result = erode(&mask, self.config.erode_iterations);
             debug!(
@@ -62,11 +97,27 @@ impl ChromaPipeline {
             mask
         };
 
-        // 3. アルファチャンネル生成（改善E適用：SIMD反転）
+        // 4. アルファチャンネル生成（改善E適用：SIMD反転）
         let alpha_channel = create_alpha_from_mask(&mask);
         debug!("Alpha channel generation completed");
 
-        // 4. フェザリング（改善A, D適用）
+        // 4.5. マットエッジ最適化（有効時）
+        let alpha_channel = if self.config.edge_optimization_enabled {
+            let result = optimize_edge(
+                &alpha_channel,
+                self.config.edge_threshold,
+                self.config.edge_smoothness,
+            );
+            debug!(
+                "Edge optimization completed (threshold={}, smoothness={})",
+                self.config.edge_threshold, self.config.edge_smoothness
+            );
+            result
+        } else {
+            alpha_channel
+        };
+
+        // 5. フェザリング（改善A, D適用）
         let alpha_channel = if self.config.feather_amount > 0 {
             let result = feather_alpha(&alpha_channel, self.config.feather_amount);
             debug!(
@@ -78,7 +129,24 @@ impl ChromaPipeline {
             alpha_channel
         };
 
-        // 5. デスピル処理（改善A, D, G適用：インプレース）
+        // 5.5. バイラテラルフィルタ（有効時）
+        let alpha_channel = if self.config.bilateral_enabled {
+            let result = bilateral_filter_alpha(
+                &alpha_channel,
+                self.config.bilateral_spatial_sigma,
+                self.config.bilateral_color_sigma,
+                self.config.bilateral_radius,
+            );
+            debug!(
+                "Bilateral filter completed (spatial_sigma={}, color_sigma={})",
+                self.config.bilateral_spatial_sigma, self.config.bilateral_color_sigma
+            );
+            result
+        } else {
+            alpha_channel
+        };
+
+        // 6. デスピル処理（改善A, D, G適用：インプレース）
         let mut result = image.clone();
         if self.config.despill_strength > 0.0 {
             despill(
@@ -93,7 +161,7 @@ impl ChromaPipeline {
             );
         }
 
-        // 6. エッジシャープニング（有効時）
+        // 7. エッジシャープニング（有効時）
         if self.config.sharpen_enabled {
             result = sharpen(
                 &result,
@@ -107,7 +175,7 @@ impl ChromaPipeline {
             );
         }
 
-        // 7. アルファチャンネル適用（改善E, G適用：SIMD + インプレース）
+        // 8. アルファチャンネル適用（改善E, G適用：SIMD + インプレース）
         apply_alpha_inplace(&mut result, &alpha_channel);
         debug!("Alpha channel applied");
 

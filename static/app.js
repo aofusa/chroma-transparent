@@ -1164,7 +1164,7 @@ class ChromaApp {
         if (!this.originalImageData || this.isProcessing) return;
 
         this.isProcessing = true;
-        this.loadingOverlay.hidden = false;
+        // プレビュー更新時はローディングアニメーションを表示しない（UX向上）
 
         try {
             const blob = await this.processor.processPreview(
@@ -1182,7 +1182,6 @@ class ChromaApp {
             console.error('Preview error:', e);
         } finally {
             this.isProcessing = false;
-            this.loadingOverlay.hidden = true;
         }
     }
 

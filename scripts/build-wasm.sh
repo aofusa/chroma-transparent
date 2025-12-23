@@ -50,6 +50,7 @@ cp pkg/chroma_transparent.js "$OUTPUT_DIR/"
 cp assets/index-wasm.html "$OUTPUT_DIR/index.html"
 cp assets/style.css "$OUTPUT_DIR/"
 cp assets/wasm.js "$OUTPUT_DIR/app.js"
+cp assets/chroma-worker.js "$OUTPUT_DIR/"
 
 # リリースビルドの場合はwasm-optで最適化
 if [[ "$OPT_LEVEL" == "release" ]] && command -v wasm-opt &> /dev/null; then

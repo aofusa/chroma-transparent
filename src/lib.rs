@@ -47,8 +47,8 @@ pub mod server;
 pub mod wasm;
 
 // 主要な型を再エクスポート
-pub use color::Rgb;
-pub use config::ProcessConfig;
+pub use color::{ColorSpace, Rgb};
+pub use config::{ColorConfig, ProcessConfig};
 pub use error::{ChromaError, Result};
 pub use pipeline::ChromaPipeline;
 

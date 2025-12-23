@@ -15,7 +15,7 @@ use log::debug;
 use crate::config::ProcessConfig;
 use crate::processor::alpha::apply_alpha_inplace;
 use crate::processor::{
-    create_alpha_from_mask, create_chroma_mask, despill, dilate, erode, feather_alpha,
+    create_alpha_from_mask, create_chroma_mask, despill, dilate, erode, feather_alpha, sharpen,
 };
 
 /// クロマキー処理パイプライン
@@ -93,7 +93,21 @@ impl ChromaPipeline {
             );
         }
 
-        // 6. アルファチャンネル適用（改善E, G適用：SIMD + インプレース）
+        // 6. エッジシャープニング（有効時）
+        if self.config.sharpen_enabled {
+            result = sharpen(
+                &result,
+                self.config.sharpen_amount,
+                self.config.sharpen_radius,
+                self.config.sharpen_threshold,
+            );
+            debug!(
+                "Sharpen completed (amount={}, radius={})",
+                self.config.sharpen_amount, self.config.sharpen_radius
+            );
+        }
+
+        // 7. アルファチャンネル適用（改善E, G適用：SIMD + インプレース）
         apply_alpha_inplace(&mut result, &alpha_channel);
         debug!("Alpha channel applied");
 
@@ -137,6 +151,7 @@ mod tests {
             erode_iterations: 0,
             dilate_iterations: 0,
             verbose: false,
+            ..Default::default()
         };
 
         let pipeline = ChromaPipeline::new(config);
@@ -160,6 +175,7 @@ mod tests {
             erode_iterations: 0,
             dilate_iterations: 1,
             verbose: false,
+            ..Default::default()
         };
 
         let pipeline = ChromaPipeline::new(config);

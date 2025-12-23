@@ -37,6 +37,10 @@ pub enum ChromaError {
     /// 入力ファイルが存在しない
     #[error("Input file not found: {path}")]
     InputFileNotFound { path: String },
+
+    /// 無効なパラメータ
+    #[error("Invalid parameter: {name} = {value}")]
+    InvalidParameter { name: String, value: String },
 }
 
 /// Result型のエイリアス

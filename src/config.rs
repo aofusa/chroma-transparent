@@ -2,8 +2,15 @@
 
 #[cfg(feature = "cli")]
 use crate::cli::Args;
-use crate::color::Rgb;
+use crate::color::{ColorSpace, Rgb};
 use crate::error::{ChromaError, Result};
+
+/// 多色検出用の色設定
+#[derive(Debug, Clone)]
+pub struct ColorConfig {
+    pub color: Rgb,
+    pub tolerance: f32,
+}
 
 /// クロマキー処理の設定パラメータ
 #[derive(Debug, Clone)]
@@ -22,6 +29,51 @@ pub struct ProcessConfig {
     pub dilate_iterations: u32,
     /// 詳細ログ出力
     pub verbose: bool,
+    
+    // 新規フィールド
+    /// 多色検出設定（Noneの場合は単色検出）
+    pub multi_colors: Option<Vec<ColorConfig>>,
+    /// 色空間
+    pub color_space: ColorSpace,
+    
+    /// バイラテラルフィルタ有効/無効
+    pub bilateral_enabled: bool,
+    /// バイラテラルフィルタ: 空間的重みの標準偏差
+    pub bilateral_spatial_sigma: f32,
+    /// バイラテラルフィルタ: 色の重みの標準偏差
+    pub bilateral_color_sigma: f32,
+    /// バイラテラルフィルタ: カーネル半径
+    pub bilateral_radius: u32,
+    
+    /// マルチスケール処理有効/無効
+    pub multiscale_enabled: bool,
+    /// マルチスケール処理: スケールレベル数
+    pub multiscale_levels: u32,
+    /// マルチスケール処理: スケール係数
+    pub multiscale_scale_factor: f32,
+    
+    /// マットエッジ最適化有効/無効
+    pub edge_optimization_enabled: bool,
+    /// マットエッジ最適化: エッジ検出の閾値
+    pub edge_threshold: f32,
+    /// マットエッジ最適化: エッジの滑らかさ
+    pub edge_smoothness: f32,
+    
+    /// 影の処理有効/無効
+    pub shadow_removal_enabled: bool,
+    /// 影の処理: 影検出の閾値
+    pub shadow_threshold: f32,
+    /// 影の処理: 影除去の強度
+    pub shadow_removal_strength: f32,
+    
+    /// エッジシャープニング有効/無効
+    pub sharpen_enabled: bool,
+    /// エッジシャープニング: シャープニング強度
+    pub sharpen_amount: f32,
+    /// エッジシャープニング: シャープニング半径
+    pub sharpen_radius: f32,
+    /// エッジシャープニング: シャープニング閾値
+    pub sharpen_threshold: f32,
 }
 
 impl Default for ProcessConfig {
@@ -34,6 +86,32 @@ impl Default for ProcessConfig {
             erode_iterations: 0,
             dilate_iterations: 1,
             verbose: false,
+            
+            // 新規フィールドのデフォルト値
+            multi_colors: None,
+            color_space: ColorSpace::Hsv,
+            
+            bilateral_enabled: false,
+            bilateral_spatial_sigma: 5.0,
+            bilateral_color_sigma: 50.0,
+            bilateral_radius: 5,
+            
+            multiscale_enabled: false,
+            multiscale_levels: 3,
+            multiscale_scale_factor: 0.5,
+            
+            edge_optimization_enabled: false,
+            edge_threshold: 0.1,
+            edge_smoothness: 0.5,
+            
+            shadow_removal_enabled: false,
+            shadow_threshold: 0.3,
+            shadow_removal_strength: 0.7,
+            
+            sharpen_enabled: false,
+            sharpen_amount: 0.5,
+            sharpen_radius: 1.0,
+            sharpen_threshold: 0.0,
         }
     }
 }
@@ -99,6 +177,41 @@ impl ProcessConfig {
     pub fn from_cli(args: &Args) -> Result<Self> {
         // HEXコードまたは色名を受け付ける
         let chroma_color = Rgb::from_color_spec(&args.color)?;
+        
+        // 多色検出の設定
+        let multi_colors = if args.multi_color.is_empty() {
+            None
+        } else {
+            Some(
+                args.multi_color
+                    .iter()
+                    .map(|s| {
+                        let parts: Vec<&str> = s.split(':').collect();
+                        if parts.len() != 2 {
+                            return Err(ChromaError::InvalidParameter {
+                                name: "multi-color".to_string(),
+                                value: s.clone(),
+                            });
+                        }
+                        let color = Rgb::from_color_spec(parts[0])?;
+                        let tolerance = parts[1]
+                            .parse::<f32>()
+                            .map_err(|_| ChromaError::InvalidParameter {
+                                name: "multi-color tolerance".to_string(),
+                                value: parts[1].to_string(),
+                            })?;
+                        Ok(ColorConfig { color, tolerance })
+                    })
+                    .collect::<Result<Vec<_>>>()?,
+            )
+        };
+        
+        // 色空間の設定
+        let color_space = ColorSpace::from_str(&args.color_space)
+            .map_err(|e| ChromaError::InvalidParameter {
+                name: "color-space".to_string(),
+                value: e,
+            })?;
 
         Ok(Self {
             chroma_color,
@@ -107,8 +220,32 @@ impl ProcessConfig {
             despill_strength: args.despill,
             erode_iterations: args.erode,
             dilate_iterations: args.dilate,
-            // verbose フラグは後方互換性のために維持（ログ出力は log クレートで制御）
             verbose: args.verbose > 0,
+            
+            multi_colors,
+            color_space,
+            
+            bilateral_enabled: args.bilateral,
+            bilateral_spatial_sigma: args.bilateral_spatial_sigma,
+            bilateral_color_sigma: args.bilateral_color_sigma,
+            bilateral_radius: args.bilateral_radius,
+            
+            multiscale_enabled: args.multiscale,
+            multiscale_levels: args.multiscale_levels,
+            multiscale_scale_factor: args.multiscale_scale_factor,
+            
+            edge_optimization_enabled: args.edge_optimization,
+            edge_threshold: args.edge_threshold,
+            edge_smoothness: args.edge_smoothness,
+            
+            shadow_removal_enabled: args.shadow_removal,
+            shadow_threshold: args.shadow_threshold,
+            shadow_removal_strength: args.shadow_removal_strength,
+            
+            sharpen_enabled: args.sharpen,
+            sharpen_amount: args.sharpen_amount,
+            sharpen_radius: args.sharpen_radius,
+            sharpen_threshold: args.sharpen_threshold,
         })
     }
 }

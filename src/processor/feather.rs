@@ -30,7 +30,7 @@ pub fn feather_alpha(alpha: &GrayImage, amount: u32) -> GrayImage {
 ///
 /// 改善案A: 行/列ごとの並列処理
 /// 改善案D: バッファ直接操作
-fn gaussian_blur(image: &GrayImage, kernel_size: u32, sigma: f32) -> GrayImage {
+pub fn gaussian_blur(image: &GrayImage, kernel_size: u32, sigma: f32) -> GrayImage {
     // ガウシアンカーネルを生成
     let kernel = generate_gaussian_kernel(kernel_size, sigma);
     let radius = (kernel_size / 2) as i32;

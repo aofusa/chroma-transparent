@@ -14,6 +14,7 @@ pub mod despill;
 pub mod feather;
 pub mod mask;
 pub mod morphology;
+pub mod sharpen;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod simd;
@@ -23,4 +24,5 @@ pub use despill::despill;
 pub use feather::feather_alpha;
 pub use mask::create_chroma_mask;
 pub use morphology::{dilate, erode};
+pub use sharpen::sharpen;
 

@@ -169,6 +169,83 @@ pub struct Args {
     /// 静音モード（エラーのみ出力）
     #[arg(short, long)]
     pub quiet: bool,
+
+    // === 新規機能 ===
+    /// 多色検出（複数回指定可能、形式: COLOR:TOLERANCE）
+    #[arg(long, value_name = "COLOR:TOLERANCE")]
+    pub multi_color: Vec<String>,
+
+    /// 色空間 (hsv, lab, lch, yuv)
+    #[arg(long, default_value = "hsv", value_name = "SPACE")]
+    pub color_space: String,
+
+    /// バイラテラルフィルタを有効化
+    #[arg(long)]
+    pub bilateral: bool,
+
+    /// バイラテラルフィルタ: 空間的重みの標準偏差
+    #[arg(long, default_value = "5.0", value_name = "FLOAT")]
+    pub bilateral_spatial_sigma: f32,
+
+    /// バイラテラルフィルタ: 色の重みの標準偏差
+    #[arg(long, default_value = "50.0", value_name = "FLOAT")]
+    pub bilateral_color_sigma: f32,
+
+    /// バイラテラルフィルタ: カーネル半径
+    #[arg(long, default_value = "5", value_name = "INT")]
+    pub bilateral_radius: u32,
+
+    /// マルチスケール処理を有効化
+    #[arg(long)]
+    pub multiscale: bool,
+
+    /// マルチスケール処理: スケールレベル数
+    #[arg(long, default_value = "3", value_name = "INT")]
+    pub multiscale_levels: u32,
+
+    /// マルチスケール処理: スケール係数
+    #[arg(long, default_value = "0.5", value_name = "FLOAT")]
+    pub multiscale_scale_factor: f32,
+
+    /// マットエッジ最適化を有効化
+    #[arg(long)]
+    pub edge_optimization: bool,
+
+    /// マットエッジ最適化: エッジ検出の閾値
+    #[arg(long, default_value = "0.1", value_name = "FLOAT")]
+    pub edge_threshold: f32,
+
+    /// マットエッジ最適化: エッジの滑らかさ
+    #[arg(long, default_value = "0.5", value_name = "FLOAT")]
+    pub edge_smoothness: f32,
+
+    /// 影の処理を有効化
+    #[arg(long)]
+    pub shadow_removal: bool,
+
+    /// 影の処理: 影検出の閾値
+    #[arg(long, default_value = "0.3", value_name = "FLOAT")]
+    pub shadow_threshold: f32,
+
+    /// 影の処理: 影除去の強度
+    #[arg(long, default_value = "0.7", value_name = "FLOAT")]
+    pub shadow_removal_strength: f32,
+
+    /// エッジシャープニングを有効化
+    #[arg(long)]
+    pub sharpen: bool,
+
+    /// エッジシャープニング: シャープニング強度
+    #[arg(long, default_value = "0.5", value_name = "FLOAT")]
+    pub sharpen_amount: f32,
+
+    /// エッジシャープニング: シャープニング半径
+    #[arg(long, default_value = "1.0", value_name = "FLOAT")]
+    pub sharpen_radius: f32,
+
+    /// エッジシャープニング: シャープニング閾値
+    #[arg(long, default_value = "0.0", value_name = "FLOAT")]
+    pub sharpen_threshold: f32,
 }
 
 impl Args {
@@ -344,6 +421,26 @@ mod tests {
             enable_video: false,
             verbose: 0,
             quiet: false,
+            // 新規フィールド
+            multi_color: vec![],
+            color_space: "hsv".to_string(),
+            bilateral: false,
+            bilateral_spatial_sigma: 5.0,
+            bilateral_color_sigma: 50.0,
+            bilateral_radius: 5,
+            multiscale: false,
+            multiscale_levels: 3,
+            multiscale_scale_factor: 0.5,
+            edge_optimization: false,
+            edge_threshold: 0.1,
+            edge_smoothness: 0.5,
+            shadow_removal: false,
+            shadow_threshold: 0.3,
+            shadow_removal_strength: 0.7,
+            sharpen: false,
+            sharpen_amount: 0.5,
+            sharpen_radius: 1.0,
+            sharpen_threshold: 0.0,
         }
     }
 

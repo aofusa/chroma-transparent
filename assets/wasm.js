@@ -160,14 +160,20 @@ class ChromaProcessor {
             
             this.pendingTasks.set(taskId, { resolve, reject });
             
-            // ArrayBufferをTransferableとして送信
+            // ArrayBufferをコピーしてTransferableとして送信
+            // 元のデータを保持するためコピーが必要
             const transferables = [];
+            let messagePayload = { ...payload };
+            
             if (payload.imageData) {
-                transferables.push(payload.imageData);
+                // ArrayBufferをコピー
+                const copy = payload.imageData.slice(0);
+                messagePayload.imageData = copy;
+                transferables.push(copy);
             }
             
             this.worker.postMessage(
-                { type, taskId, payload },
+                { type, taskId, payload: messagePayload },
                 transferables
             );
         });

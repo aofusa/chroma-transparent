@@ -19,7 +19,8 @@
 - **ディレクトリ一括処理**: ディレクトリ内の全画像ファイルを一括処理
 - **再帰的探索**: サブディレクトリも含めて処理（深さ指定可能）
 - **動画対応** (feature: `video`): ffmpegを使用してMP4, WebM, MOV等の動画を透過動画（WebM/MOV）に変換
-- **Webサーバモード** (feature: `server`): ブラウザからGUIで操作、REST API提供、OpenAPI対応
+- **Webサーバモード** (feature: `server`): ブラウザからGUIで操作、REST API提供、OpenAPI対応、Graceful Shutdown対応
+- **WASMモード** (feature: `wasm`): サーバー不要でブラウザ上のみで画像処理が可能な静的配信版
 
 ## インストール
 
@@ -53,7 +54,33 @@ cargo install --path .
 
 # 動画処理も有効にする
 cargo install --path . --features video
+
+# Webサーバモードを有効にする
+cargo install --path . --features server
+
+# 全機能（CLI + サーバ + 動画）
+cargo install --path . --features full
 ```
+
+### WASMビルド
+
+ブラウザ上のみで動作する静的配信版をビルドするには、`wasm-pack` が必要です。
+
+```bash
+# wasm-packのインストール（未インストールの場合）
+cargo install wasm-pack
+
+# WASMビルド（ビルドスクリプト使用）
+./scripts/build-wasm.sh
+
+# リリースビルド（最適化あり）
+./scripts/build-wasm.sh --release
+
+# 手動でビルドする場合
+wasm-pack build --target web --out-dir pkg -- --no-default-features --features wasm
+```
+
+ビルド後、`static/` ディレクトリに静的配信用ファイルが生成されます。
 
 ## 使い方
 
@@ -438,6 +465,93 @@ chroma-transparent --serve --enable-video
 - `--storage-dir` 指定時: 指定ディレクトリに永続保存
 - ファイル名形式: `YYYYMMDD_HHMMSS_hash8.png`
 
+### Graceful Shutdown
+
+サーバーは Ctrl+C（SIGINT）または SIGTERM シグナルを受け取ると、処理中のリクエストが完了するまで待機してから安全に終了します。
+
+```bash
+# サーバー起動
+chroma-transparent --serve
+
+# 停止（Ctrl+C で Graceful Shutdown）
+# 処理中のリクエストが完了してから終了
+^C
+# Server stopped gracefully
+```
+
+## WASMモード（静的配信）
+
+`--features wasm` でビルドすると、サーバー不要でブラウザ上のみで動作する静的配信版を作成できます。画像データはサーバーに送信されず、すべてブラウザ上で処理されます。
+
+### WASMビルド
+
+```bash
+# ビルドスクリプトを使用（推奨）
+./scripts/build-wasm.sh --release
+
+# 生成されるファイル
+static/
+├── index.html                     # WASM用HTML
+├── style.css                      # スタイルシート
+├── app.js                         # WASMモードJS
+├── chroma_transparent.js          # WASMバインディング
+└── chroma_transparent_bg.wasm     # WASMバイナリ (~4MB)
+```
+
+### ローカルで確認
+
+```bash
+# Python の HTTP サーバーで配信
+python3 -m http.server 8000 --directory static
+
+# または npx serve を使用
+npx serve static
+
+# ブラウザでアクセス
+# http://localhost:8000/
+```
+
+### 特徴
+
+- **オフライン動作**: サーバー不要、静的ファイルのみで動作
+- **プライバシー**: 画像データはブラウザ外に送信されない
+- **デプロイ容易**: 任意の静的ホスティングサービス（GitHub Pages, Netlify, Vercel等）で配信可能
+
+### 制限事項
+
+- **シングルスレッド**: WebAssembly では Rayon 並列処理が無効のため、大画像の処理に時間がかかる場合があります
+- **メモリ制限**: ブラウザのメモリ制限により、非常に大きな画像（16MP以上）は処理できない場合があります
+- **動画非対応**: WASM版では動画処理機能は利用できません
+
+### JavaScript API
+
+WASM版はJavaScriptから直接呼び出すこともできます。
+
+```javascript
+import init, { WasmProcessParams, processImage, processPreview, getVersion } from './chroma_transparent.js';
+
+// 初期化
+await init();
+
+// パラメータ設定
+const params = new WasmProcessParams();
+params.setColor("lime");
+params.setTolerance(0.3);
+params.setFeather(5);
+params.setDespill(0.7);
+
+// 画像処理
+const imageData = new Uint8Array(await file.arrayBuffer());
+const result = processImage(imageData, params);  // Uint8Array (PNG)
+
+// プレビュー生成（縮小版）
+const preview = processPreview(imageData, params, 512);
+
+// Blob に変換してダウンロード
+const blob = new Blob([result], { type: 'image/png' });
+const url = URL.createObjectURL(blob);
+```
+
 ## 動作要件
 
 - Rust 1.70 以上
@@ -447,9 +561,56 @@ chroma-transparent --serve --enable-video
 
 | Feature | 説明 | デフォルト |
 |---------|------|----------|
+| `cli` | CLIツール機能（clap, env_logger等） | **有効** |
+| `parallel` | Rayon並列処理（高速化） | **有効** |
 | `video` | 動画処理機能（ffmpeg連携） | 無効 |
 | `server` | Webサーバモード（REST API + GUI） | 無効 |
-| `full` | `video` + `server` | 無効 |
+| `wasm` | WebAssembly版（ブラウザ上で動作） | 無効 |
+| `full` | `cli` + `parallel` + `video` + `server` | 無効 |
+
+### ビルドパターン
+
+```bash
+# デフォルト（CLI + 並列処理）
+cargo build --release
+
+# サーバモード
+cargo build --release --features server
+
+# 動画対応
+cargo build --release --features video
+
+# 全機能
+cargo build --release --features full
+
+# WASM版（CLI/サーバ/並列処理は無効）
+wasm-pack build --target web -- --no-default-features --features wasm
+```
+
+### アーキテクチャ
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    chroma-transparent                    │
+├─────────────────────────────────────────────────────────┤
+│  Core Modules (共通)                                     │
+│  ┌─────────┐ ┌─────────┐ ┌──────────┐ ┌──────────────┐ │
+│  │ color   │ │ config  │ │ pipeline │ │ processor/*  │ │
+│  └─────────┘ └─────────┘ └──────────┘ └──────────────┘ │
+├─────────────────────────────────────────────────────────┤
+│  CLI Mode (--features cli)      │  WASM Mode            │
+│  ┌─────────┐ ┌─────────┐       │  (--features wasm)    │
+│  │ cli.rs  │ │ main.rs │       │  ┌─────────────┐      │
+│  └─────────┘ └─────────┘       │  │ wasm.rs     │      │
+│  + server (--features server)   │  │ wasm.js     │      │
+│                                 │  │ index.html  │      │
+├─────────────────────────────────┴──┴─────────────┴──────┤
+│  Parallel Processing (--features parallel)               │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │ rayon (有効時のみ、WASM非対応)                     │   │
+│  └──────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────┘
+```
 
 ## ライセンス
 

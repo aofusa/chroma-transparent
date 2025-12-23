@@ -2,79 +2,304 @@
  * chroma-transparent WASM モード
  * Advanced Compare View with Zoom/Pan/Slider
  * 
- * サーバー版 app.js をベースに、API呼び出しをWASM呼び出しに置換
+ * Web Workers対応版：大画像処理時のUIブロックを回避
  */
 
-// === WASM モジュール管理 ===
-
-let wasmModule = null;
-let wasmParams = null;
-let wasmReady = false;
-let initPromise = null;
+// === WASM/Worker 処理管理 ===
 
 /**
- * WASMモジュールを初期化
+ * ChromaProcessor - WASM処理のラッパー
+ * Worker利用可能時はWorkerで、そうでなければメインスレッドで処理
  */
-async function initWasm() {
-    if (initPromise) {
-        return initPromise;
+class ChromaProcessor {
+    constructor() {
+        this.worker = null;
+        this.wasmModule = null;
+        this.wasmParams = null;
+        this.useWorker = false;
+        this.ready = false;
+        this.version = '-';
+        
+        // タスク管理
+        this.taskId = 0;
+        this.pendingTasks = new Map();
+        
+        // 初期化Promise
+        this.initPromise = null;
     }
-
-    initPromise = (async () => {
-        try {
-            const wasm = await import('./chroma_transparent.js');
-            await wasm.default();
-            
-            wasmModule = wasm;
-            wasmParams = new wasm.WasmProcessParams();
-            wasmReady = true;
-            
-            console.log('WASM initialized, version:', wasm.getVersion());
-            return wasm;
-        } catch (error) {
-            console.error('Failed to initialize WASM:', error);
-            throw error;
+    
+    /**
+     * 初期化
+     * @returns {Promise<string>} バージョン
+     */
+    async init() {
+        if (this.initPromise) {
+            return this.initPromise;
         }
-    })();
-
-    return initPromise;
+        
+        this.initPromise = this._init();
+        return this.initPromise;
+    }
+    
+    async _init() {
+        // Worker対応チェック
+        // 注意: module workersはtype: 'module'が必要
+        const supportsModuleWorker = this._checkModuleWorkerSupport();
+        
+        if (supportsModuleWorker) {
+            try {
+                await this._initWorker();
+                console.log('ChromaProcessor: Using Web Worker');
+                return this.version;
+            } catch (e) {
+                console.warn('Worker initialization failed, falling back to main thread:', e);
+            }
+        }
+        
+        // フォールバック: メインスレッドで直接実行
+        await this._initDirect();
+        console.log('ChromaProcessor: Using main thread');
+        return this.version;
+    }
+    
+    /**
+     * Module Worker サポートチェック
+     */
+    _checkModuleWorkerSupport() {
+        if (typeof Worker === 'undefined') return false;
+        
+        // file://プロトコルでは動作しない
+        if (location.protocol === 'file:') return false;
+        
+        return true;
+    }
+    
+    /**
+     * Workerを使用して初期化
+     */
+    async _initWorker() {
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error('Worker initialization timeout'));
+            }, 10000);
+            
+            // Module Workerとして起動
+            this.worker = new Worker('./chroma-worker.js', { type: 'module' });
+            
+            const handleMessage = (e) => {
+                const { type, taskId, payload } = e.data;
+                
+                if (type === 'loaded') {
+                    // Worker読み込み完了、初期化開始
+                    this.worker.postMessage({
+                        type: 'init',
+                        taskId: 0,
+                        payload: { wasmUrl: './chroma_transparent.js' }
+                    });
+                } else if (type === 'ready' && taskId === 0) {
+                    clearTimeout(timeout);
+                    this.useWorker = true;
+                    this.ready = true;
+                    this.version = payload.version;
+                    resolve(this.version);
+                } else if (type === 'error' && taskId === 0) {
+                    clearTimeout(timeout);
+                    reject(new Error(payload.message));
+                } else {
+                    // 通常のタスク応答
+                    this._handleWorkerMessage(e);
+                }
+            };
+            
+            this.worker.onmessage = handleMessage;
+            this.worker.onerror = (e) => {
+                clearTimeout(timeout);
+                reject(new Error(`Worker error: ${e.message}`));
+            };
+        });
+    }
+    
+    /**
+     * メインスレッドで直接初期化
+     */
+    async _initDirect() {
+        const wasm = await import('./chroma_transparent.js');
+        await wasm.default();
+        
+        this.wasmModule = wasm;
+        this.wasmParams = new wasm.WasmProcessParams();
+        this.useWorker = false;
+        this.ready = true;
+        this.version = wasm.getVersion();
+    }
+    
+    /**
+     * Workerからのメッセージを処理
+     */
+    _handleWorkerMessage(e) {
+        const { type, taskId, payload } = e.data;
+        const task = this.pendingTasks.get(taskId);
+        
+        if (!task) return;
+        
+        this.pendingTasks.delete(taskId);
+        
+        if (type === 'result') {
+            task.resolve(payload);
+        } else if (type === 'error') {
+            task.reject(new Error(payload.message));
+        }
+    }
+    
+    /**
+     * Workerにタスクを送信
+     */
+    _sendToWorker(type, payload) {
+        return new Promise((resolve, reject) => {
+            const taskId = ++this.taskId;
+            
+            this.pendingTasks.set(taskId, { resolve, reject });
+            
+            // ArrayBufferをTransferableとして送信
+            const transferables = [];
+            if (payload.imageData) {
+                transferables.push(payload.imageData);
+            }
+            
+            this.worker.postMessage(
+                { type, taskId, payload },
+                transferables
+            );
+        });
+    }
+    
+    /**
+     * パラメータをWASMに同期（メインスレッドモード用）
+     */
+    _syncParams(params) {
+        if (!this.wasmParams) return;
+        
+        if (params.color !== undefined) {
+            this.wasmParams.setColor(String(params.color));
+        }
+        if (params.tolerance !== undefined) {
+            this.wasmParams.setTolerance(parseFloat(params.tolerance));
+        }
+        if (params.feather !== undefined) {
+            this.wasmParams.setFeather(parseInt(params.feather, 10));
+        }
+        if (params.despill !== undefined) {
+            this.wasmParams.setDespill(parseFloat(params.despill));
+        }
+        if (params.erode !== undefined) {
+            this.wasmParams.setErode(parseInt(params.erode, 10));
+        }
+        if (params.dilate !== undefined) {
+            this.wasmParams.setDilate(parseInt(params.dilate, 10));
+        }
+    }
+    
+    /**
+     * プレビュー画像を生成
+     * @param {Uint8Array} imageData 画像データ
+     * @param {Object} params 処理パラメータ
+     * @param {number} maxSize 最大サイズ
+     * @returns {Promise<Blob>} 処理結果
+     */
+    async processPreview(imageData, params, maxSize = 512) {
+        if (!this.ready) {
+            throw new Error('Processor not ready');
+        }
+        
+        if (this.useWorker) {
+            // Worker経由で処理
+            const result = await this._sendToWorker('preview', {
+                imageData: imageData.buffer,
+                params,
+                maxSize
+            });
+            return new Blob([new Uint8Array(result.data)], { type: 'image/png' });
+        } else {
+            // メインスレッドで処理
+            this._syncParams(params);
+            const result = this.wasmModule.processPreview(imageData, this.wasmParams, maxSize);
+            return new Blob([result], { type: 'image/png' });
+        }
+    }
+    
+    /**
+     * フル画像を処理
+     * @param {Uint8Array} imageData 画像データ
+     * @param {Object} params 処理パラメータ
+     * @returns {Promise<Blob>} 処理結果
+     */
+    async processImage(imageData, params) {
+        if (!this.ready) {
+            throw new Error('Processor not ready');
+        }
+        
+        if (this.useWorker) {
+            // Worker経由で処理
+            const result = await this._sendToWorker('process', {
+                imageData: imageData.buffer,
+                params
+            });
+            return new Blob([new Uint8Array(result.data)], { type: 'image/png' });
+        } else {
+            // メインスレッドで処理
+            this._syncParams(params);
+            const result = this.wasmModule.processImage(imageData, this.wasmParams);
+            return new Blob([result], { type: 'image/png' });
+        }
+    }
+    
+    /**
+     * 画像情報を取得
+     */
+    async getImageInfo(imageData) {
+        if (!this.ready) {
+            throw new Error('Processor not ready');
+        }
+        
+        if (this.useWorker) {
+            return await this._sendToWorker('info', {
+                imageData: imageData.buffer
+            });
+        } else {
+            return this.wasmModule.getImageInfo(imageData);
+        }
+    }
+    
+    /**
+     * Workerを使用しているかどうか
+     */
+    isUsingWorker() {
+        return this.useWorker;
+    }
+    
+    /**
+     * リソースを解放
+     */
+    dispose() {
+        if (this.worker) {
+            this.worker.terminate();
+            this.worker = null;
+        }
+        this.wasmModule = null;
+        this.wasmParams = null;
+        this.ready = false;
+        this.pendingTasks.clear();
+    }
 }
 
-/**
- * WASMパラメータを更新
- */
-function syncParamsToWasm(color, tolerance, feather, despill, erode, dilate) {
-    if (!wasmParams) return;
-    wasmParams.setColor(String(color));
-    wasmParams.setTolerance(parseFloat(tolerance));
-    wasmParams.setFeather(parseInt(feather, 10));
-    wasmParams.setDespill(parseFloat(despill));
-    wasmParams.setErode(parseInt(erode, 10));
-    wasmParams.setDilate(parseInt(dilate, 10));
-}
-
-/**
- * 画像を処理（WASM）
- */
-async function processImageWasm(imageData) {
-    if (!wasmReady) throw new Error('WASM not ready');
-    const result = wasmModule.processImage(imageData, wasmParams);
-    return new Blob([result], { type: 'image/png' });
-}
-
-/**
- * プレビュー画像を生成（WASM）
- */
-async function processPreviewWasm(imageData, maxSize = 512) {
-    if (!wasmReady) throw new Error('WASM not ready');
-    const result = wasmModule.processPreview(imageData, wasmParams, maxSize);
-    return new Blob([result], { type: 'image/png' });
-}
+// グローバルプロセッサインスタンス
+const processor = new ChromaProcessor();
 
 // === メインアプリケーション ===
 
 class ChromaApp {
     constructor() {
+        this.processor = processor;
         this.initElements();
         this.initState();
         this.bindEvents();
@@ -285,12 +510,16 @@ class ChromaApp {
     }
 
     async loadConfig() {
-        // WASM初期化
+        // WASM/Worker初期化
         try {
-            await initWasm();
-            document.getElementById('version').textContent = wasmModule.getVersion();
+            await this.processor.init();
+            const versionEl = document.getElementById('version');
+            if (versionEl) {
+                const workerMode = this.processor.isUsingWorker() ? ' (Worker)' : '';
+                versionEl.textContent = this.processor.version + workerMode;
+            }
         } catch (e) {
-            console.error('Failed to initialize WASM:', e);
+            console.error('Failed to initialize processor:', e);
             alert('WASMの初期化に失敗しました。ブラウザがWebAssemblyをサポートしているか確認してください。');
         }
         this.updateColorPreview();
@@ -674,6 +903,17 @@ class ChromaApp {
         return this.colorSelect.value;
     }
 
+    getParams() {
+        return {
+            color: this.getColor(),
+            tolerance: parseFloat(this.toleranceSlider.value),
+            feather: parseInt(this.featherSlider.value, 10),
+            despill: parseFloat(this.despillSlider.value),
+            erode: parseInt(this.erodeSlider.value, 10),
+            dilate: parseInt(this.dilateSlider.value, 10)
+        };
+    }
+
     updateColorPreview() {
         const color = this.getColor();
         const hex = this.colorMap[color] || (color.startsWith('#') ? color : '#' + color);
@@ -701,18 +941,12 @@ class ChromaApp {
         this.loadingOverlay.hidden = false;
 
         try {
-            // WASMパラメータを同期
-            syncParamsToWasm(
-                this.getColor(),
-                this.toleranceSlider.value,
-                this.featherSlider.value,
-                this.despillSlider.value,
-                this.erodeSlider.value,
-                this.dilateSlider.value
+            // プロセッサ経由でプレビュー生成（Worker or メインスレッド）
+            const blob = await this.processor.processPreview(
+                this.originalImageData,
+                this.getParams(),
+                512
             );
-
-            // WASMでプレビュー生成
-            const blob = await processPreviewWasm(this.originalImageData, 512);
             
             if (this.previewImage.src.startsWith('blob:')) {
                 URL.revokeObjectURL(this.previewImage.src);
@@ -753,18 +987,11 @@ class ChromaApp {
         this.loadingOverlay.hidden = false;
 
         try {
-            // WASMパラメータを同期
-            syncParamsToWasm(
-                this.getColor(),
-                this.toleranceSlider.value,
-                this.featherSlider.value,
-                this.despillSlider.value,
-                this.erodeSlider.value,
-                this.dilateSlider.value
+            // プロセッサ経由で処理（Worker or メインスレッド）
+            const blob = await this.processor.processImage(
+                this.originalImageData,
+                this.getParams()
             );
-
-            // WASMで処理
-            const blob = await processImageWasm(this.originalImageData);
 
             // ダウンロード
             const url = URL.createObjectURL(blob);
@@ -800,4 +1027,4 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Export for module usage
-export { initWasm, processImageWasm, processPreviewWasm, syncParamsToWasm };
+export { ChromaProcessor, processor };

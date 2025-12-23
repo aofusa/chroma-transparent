@@ -2,35 +2,88 @@
  * chroma-transparent WASM モード
  * Advanced Compare View with Zoom/Pan/Slider
  * 
- * Web Workers対応版：大画像処理時のUIブロックを回避
+ * 3段階フォールバック対応:
+ * 1. SharedArrayBuffer モード (COOP/COEP環境で最高速)
+ * 2. Worker モード (コピー転送、UIブロックなし)
+ * 3. Direct モード (メインスレッド、フォールバック)
  */
+
+// === 処理モード定数 ===
+const ProcessorMode = {
+    SHARED: 'shared',   // SharedArrayBuffer (最高速)
+    WORKER: 'worker',   // Worker + コピー転送
+    DIRECT: 'direct'    // メインスレッド
+};
+
+// === SharedArrayBuffer メモリレイアウト ===
+const SHARED_CONTROL_SIZE = 256;  // 制御ブロック
+const SHARED_MAX_IMAGE_SIZE = 100 * 1024 * 1024;  // 100MB
+
+// 制御ブロックオフセット (Int32)
+const CTRL_STATUS = 0;       // 状態
+const CTRL_TASK_TYPE = 1;    // タスク種別
+const CTRL_INPUT_SIZE = 2;   // 入力サイズ
+const CTRL_OUTPUT_SIZE = 3;  // 出力サイズ
+const CTRL_MAX_SIZE = 4;     // プレビュー最大サイズ
+const CTRL_ERROR = 5;        // エラーコード
+
+// 状態定数
+const STATUS_IDLE = 0;
+const STATUS_PROCESSING = 1;
+const STATUS_DONE = 2;
+const STATUS_ERROR = 3;
+
+// タスク種別
+const TASK_PREVIEW = 1;
+const TASK_PROCESS = 2;
+
+// パラメータオフセット (Float32, byte offset 64)
+const PARAM_TOLERANCE = 0;   // [64-67]
+const PARAM_DESPILL = 1;     // [68-71]
+const PARAM_FEATHER = 2;     // [72-75] as int
+const PARAM_ERODE = 3;       // [76-79] as int
+const PARAM_DILATE = 4;      // [80-83] as int
+
+// 色オフセット (byte offset 128, 64 bytes for color string)
+const COLOR_OFFSET = 128;
+const COLOR_SIZE = 64;
+
+// データオフセット
+const DATA_OFFSET = SHARED_CONTROL_SIZE;
 
 // === WASM/Worker 処理管理 ===
 
 /**
- * ChromaProcessor - WASM処理のラッパー
- * Worker利用可能時はWorkerで、そうでなければメインスレッドで処理
+ * ChromaProcessor - 3段階フォールバック対応
  */
 class ChromaProcessor {
     constructor() {
+        // モード
+        this.mode = null;  // 'shared' | 'worker' | 'direct'
+        
+        // Shared モード用
+        this.sharedBuffer = null;
+        this.controlView = null;
+        this.paramView = null;
+        this.dataView = null;
+        
+        // Worker モード用
         this.worker = null;
+        this.pendingTasks = new Map();
+        this.taskId = 0;
+        
+        // Direct モード用
         this.wasmModule = null;
         this.wasmParams = null;
-        this.useWorker = false;
+        
+        // 共通
         this.ready = false;
         this.version = '-';
-        
-        // タスク管理
-        this.taskId = 0;
-        this.pendingTasks = new Map();
-        
-        // 初期化Promise
         this.initPromise = null;
     }
     
     /**
-     * 初期化
-     * @returns {Promise<string>} バージョン
+     * 初期化 - 最適なモードを自動選択
      */
     async init() {
         if (this.initPromise) {
@@ -42,55 +95,144 @@ class ChromaProcessor {
     }
     
     async _init() {
-        // Worker対応チェック
-        // 注意: module workersはtype: 'module'が必要
-        const supportsModuleWorker = this._checkModuleWorkerSupport();
-        
-        if (supportsModuleWorker) {
+        // 優先度1: SharedArrayBuffer
+        if (this._checkSharedArrayBufferSupport()) {
             try {
-                await this._initWorker();
-                console.log('ChromaProcessor: Using Web Worker');
+                await this._initSharedMode();
+                this.mode = ProcessorMode.SHARED;
+                console.log('ChromaProcessor: Using SharedArrayBuffer mode (fastest)');
                 return this.version;
             } catch (e) {
-                console.warn('Worker initialization failed, falling back to main thread:', e);
+                console.warn('SharedArrayBuffer init failed:', e.message);
             }
         }
         
-        // フォールバック: メインスレッドで直接実行
-        await this._initDirect();
-        console.log('ChromaProcessor: Using main thread');
+        // 優先度2: Worker (コピー転送)
+        if (this._checkWorkerSupport()) {
+            try {
+                await this._initWorkerMode();
+                this.mode = ProcessorMode.WORKER;
+                console.log('ChromaProcessor: Using Worker mode (copy transfer)');
+                return this.version;
+            } catch (e) {
+                console.warn('Worker init failed:', e.message);
+            }
+        }
+        
+        // 優先度3: Direct (メインスレッド)
+        await this._initDirectMode();
+        this.mode = ProcessorMode.DIRECT;
+        console.log('ChromaProcessor: Using Direct mode (main thread)');
         return this.version;
     }
     
     /**
-     * Module Worker サポートチェック
+     * SharedArrayBuffer サポートチェック
      */
-    _checkModuleWorkerSupport() {
-        if (typeof Worker === 'undefined') return false;
+    _checkSharedArrayBufferSupport() {
+        // 1. SharedArrayBuffer が存在するか
+        if (typeof SharedArrayBuffer === 'undefined') {
+            console.log('SharedArrayBuffer: not available');
+            return false;
+        }
         
-        // file://プロトコルでは動作しない
-        if (location.protocol === 'file:') return false;
+        // 2. crossOriginIsolated かどうか（COOP/COEPヘッダーが設定されているか）
+        if (!self.crossOriginIsolated) {
+            console.log('SharedArrayBuffer: page is not cross-origin isolated');
+            return false;
+        }
+        
+        console.log('SharedArrayBuffer: available');
+        return true;
+    }
+    
+    /**
+     * Worker サポートチェック
+     */
+    _checkWorkerSupport() {
+        if (typeof Worker === 'undefined') {
+            return false;
+        }
+        
+        // file:// プロトコルでは Worker が動作しない
+        if (location.protocol === 'file:') {
+            return false;
+        }
         
         return true;
     }
     
     /**
-     * Workerを使用して初期化
+     * SharedArrayBuffer モードで初期化
      */
-    async _initWorker() {
+    async _initSharedMode() {
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
-                reject(new Error('Worker initialization timeout'));
-            }, 10000);
+                reject(new Error('SharedArrayBuffer Worker initialization timeout'));
+            }, 15000);
             
-            // Module Workerとして起動
+            // SharedArrayBuffer を作成
+            const bufferSize = SHARED_CONTROL_SIZE + SHARED_MAX_IMAGE_SIZE * 2;
+            this.sharedBuffer = new SharedArrayBuffer(bufferSize);
+            
+            // ビューを作成
+            this.controlView = new Int32Array(this.sharedBuffer, 0, 16);
+            this.paramView = new Float32Array(this.sharedBuffer, 64, 8);
+            this.dataView = new Uint8Array(this.sharedBuffer, DATA_OFFSET);
+            
+            // 初期状態を設定
+            Atomics.store(this.controlView, CTRL_STATUS, STATUS_IDLE);
+            
+            // Worker を起動
             this.worker = new Worker('./chroma-worker.js', { type: 'module' });
             
             const handleMessage = (e) => {
                 const { type, taskId, payload } = e.data;
                 
                 if (type === 'loaded') {
-                    // Worker読み込み完了、初期化開始
+                    // Worker読み込み完了、SharedArrayBufferで初期化
+                    this.worker.postMessage({
+                        type: 'init-shared',
+                        taskId: 0,
+                        payload: { 
+                            wasmUrl: './chroma_transparent.js',
+                            sharedBuffer: this.sharedBuffer
+                        }
+                    });
+                } else if (type === 'ready' && taskId === 0) {
+                    clearTimeout(timeout);
+                    this.ready = true;
+                    this.version = payload.version;
+                    resolve(this.version);
+                } else if (type === 'error' && taskId === 0) {
+                    clearTimeout(timeout);
+                    reject(new Error(payload.message));
+                }
+            };
+            
+            this.worker.onmessage = handleMessage;
+            this.worker.onerror = (e) => {
+                clearTimeout(timeout);
+                reject(new Error(`Worker error: ${e.message}`));
+            };
+        });
+    }
+    
+    /**
+     * Worker モードで初期化 (コピー転送)
+     */
+    async _initWorkerMode() {
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error('Worker initialization timeout'));
+            }, 10000);
+            
+            this.worker = new Worker('./chroma-worker.js', { type: 'module' });
+            
+            const handleMessage = (e) => {
+                const { type, taskId, payload } = e.data;
+                
+                if (type === 'loaded') {
                     this.worker.postMessage({
                         type: 'init',
                         taskId: 0,
@@ -98,7 +240,6 @@ class ChromaProcessor {
                     });
                 } else if (type === 'ready' && taskId === 0) {
                     clearTimeout(timeout);
-                    this.useWorker = true;
                     this.ready = true;
                     this.version = payload.version;
                     resolve(this.version);
@@ -106,7 +247,6 @@ class ChromaProcessor {
                     clearTimeout(timeout);
                     reject(new Error(payload.message));
                 } else {
-                    // 通常のタスク応答
                     this._handleWorkerMessage(e);
                 }
             };
@@ -120,21 +260,20 @@ class ChromaProcessor {
     }
     
     /**
-     * メインスレッドで直接初期化
+     * Direct モードで初期化
      */
-    async _initDirect() {
+    async _initDirectMode() {
         const wasm = await import('./chroma_transparent.js');
         await wasm.default();
         
         this.wasmModule = wasm;
         this.wasmParams = new wasm.WasmProcessParams();
-        this.useWorker = false;
         this.ready = true;
         this.version = wasm.getVersion();
     }
     
     /**
-     * Workerからのメッセージを処理
+     * Workerからのメッセージを処理 (Workerモード用)
      */
     _handleWorkerMessage(e) {
         const { type, taskId, payload } = e.data;
@@ -152,7 +291,7 @@ class ChromaProcessor {
     }
     
     /**
-     * Workerにタスクを送信
+     * Workerにタスクを送信 (Workerモード用)
      */
     _sendToWorker(type, payload) {
         return new Promise((resolve, reject) => {
@@ -160,13 +299,10 @@ class ChromaProcessor {
             
             this.pendingTasks.set(taskId, { resolve, reject });
             
-            // ArrayBufferをコピーしてTransferableとして送信
-            // 元のデータを保持するためコピーが必要
             const transferables = [];
             let messagePayload = { ...payload };
             
             if (payload.imageData) {
-                // ArrayBufferをコピー
                 const copy = payload.imageData.slice(0);
                 messagePayload.imageData = copy;
                 transferables.push(copy);
@@ -180,7 +316,75 @@ class ChromaProcessor {
     }
     
     /**
-     * パラメータをWASMに同期（メインスレッドモード用）
+     * パラメータを共有メモリに書き込み (Sharedモード用)
+     */
+    _writeParamsToShared(params) {
+        // Float32 パラメータ
+        this.paramView[PARAM_TOLERANCE] = parseFloat(params.tolerance) || 0.3;
+        this.paramView[PARAM_DESPILL] = parseFloat(params.despill) || 0.7;
+        this.paramView[PARAM_FEATHER] = parseInt(params.feather, 10) || 5;
+        this.paramView[PARAM_ERODE] = parseInt(params.erode, 10) || 0;
+        this.paramView[PARAM_DILATE] = parseInt(params.dilate, 10) || 1;
+        
+        // 色文字列 (byte 128-191)
+        const colorBytes = new TextEncoder().encode(String(params.color || 'lime'));
+        const colorView = new Uint8Array(this.sharedBuffer, COLOR_OFFSET, COLOR_SIZE);
+        colorView.fill(0);
+        colorView.set(colorBytes.slice(0, COLOR_SIZE - 1));
+    }
+    
+    /**
+     * SharedArrayBuffer経由で処理 (Sharedモード用)
+     */
+    async _processShared(taskType, imageData, maxSize = 512) {
+        // パラメータは呼び出し前に書き込み済み
+        
+        // 入力データを書き込み
+        this.dataView.set(imageData, 0);
+        Atomics.store(this.controlView, CTRL_INPUT_SIZE, imageData.length);
+        Atomics.store(this.controlView, CTRL_MAX_SIZE, maxSize);
+        
+        // タスク開始
+        Atomics.store(this.controlView, CTRL_TASK_TYPE, taskType);
+        Atomics.store(this.controlView, CTRL_STATUS, STATUS_PROCESSING);
+        Atomics.notify(this.controlView, CTRL_STATUS);
+        
+        // 完了を待機 (ポーリング)
+        await this._waitForCompletion();
+        
+        // 結果を取得
+        const status = Atomics.load(this.controlView, CTRL_STATUS);
+        if (status === STATUS_ERROR) {
+            throw new Error('Processing failed in worker');
+        }
+        
+        const inputSize = Atomics.load(this.controlView, CTRL_INPUT_SIZE);
+        const outputSize = Atomics.load(this.controlView, CTRL_OUTPUT_SIZE);
+        
+        // 出力データをコピー
+        return this.dataView.slice(inputSize, inputSize + outputSize);
+    }
+    
+    /**
+     * 完了を待機 (Sharedモード用)
+     */
+    async _waitForCompletion() {
+        return new Promise((resolve) => {
+            const check = () => {
+                const status = Atomics.load(this.controlView, CTRL_STATUS);
+                if (status === STATUS_DONE || status === STATUS_ERROR) {
+                    resolve();
+                } else {
+                    // ポーリング間隔を短めに
+                    setTimeout(check, 5);
+                }
+            };
+            check();
+        });
+    }
+    
+    /**
+     * パラメータをWASMに同期（Directモード用）
      */
     _syncParams(params) {
         if (!this.wasmParams) return;
@@ -205,57 +409,68 @@ class ChromaProcessor {
         }
     }
     
+    // === 統一API ===
+    
     /**
      * プレビュー画像を生成
-     * @param {Uint8Array} imageData 画像データ
-     * @param {Object} params 処理パラメータ
-     * @param {number} maxSize 最大サイズ
-     * @returns {Promise<Blob>} 処理結果
      */
     async processPreview(imageData, params, maxSize = 512) {
         if (!this.ready) {
             throw new Error('Processor not ready');
         }
         
-        if (this.useWorker) {
-            // Worker経由で処理
-            const result = await this._sendToWorker('preview', {
-                imageData: imageData.buffer,
-                params,
-                maxSize
-            });
-            return new Blob([new Uint8Array(result.data)], { type: 'image/png' });
-        } else {
-            // メインスレッドで処理
-            this._syncParams(params);
-            const result = this.wasmModule.processPreview(imageData, this.wasmParams, maxSize);
-            return new Blob([result], { type: 'image/png' });
+        switch (this.mode) {
+            case ProcessorMode.SHARED:
+                this._writeParamsToShared(params);
+                const sharedResult = await this._processShared(TASK_PREVIEW, imageData, maxSize);
+                return new Blob([sharedResult], { type: 'image/png' });
+                
+            case ProcessorMode.WORKER:
+                const workerResult = await this._sendToWorker('preview', {
+                    imageData: imageData.buffer,
+                    params,
+                    maxSize
+                });
+                return new Blob([new Uint8Array(workerResult.data)], { type: 'image/png' });
+                
+            case ProcessorMode.DIRECT:
+                this._syncParams(params);
+                const directResult = this.wasmModule.processPreview(imageData, this.wasmParams, maxSize);
+                return new Blob([directResult], { type: 'image/png' });
+                
+            default:
+                throw new Error('Invalid processor mode');
         }
     }
     
     /**
      * フル画像を処理
-     * @param {Uint8Array} imageData 画像データ
-     * @param {Object} params 処理パラメータ
-     * @returns {Promise<Blob>} 処理結果
      */
     async processImage(imageData, params) {
         if (!this.ready) {
             throw new Error('Processor not ready');
         }
         
-        if (this.useWorker) {
-            // Worker経由で処理
-            const result = await this._sendToWorker('process', {
-                imageData: imageData.buffer,
-                params
-            });
-            return new Blob([new Uint8Array(result.data)], { type: 'image/png' });
-        } else {
-            // メインスレッドで処理
-            this._syncParams(params);
-            const result = this.wasmModule.processImage(imageData, this.wasmParams);
-            return new Blob([result], { type: 'image/png' });
+        switch (this.mode) {
+            case ProcessorMode.SHARED:
+                this._writeParamsToShared(params);
+                const sharedResult = await this._processShared(TASK_PROCESS, imageData);
+                return new Blob([sharedResult], { type: 'image/png' });
+                
+            case ProcessorMode.WORKER:
+                const workerResult = await this._sendToWorker('process', {
+                    imageData: imageData.buffer,
+                    params
+                });
+                return new Blob([new Uint8Array(workerResult.data)], { type: 'image/png' });
+                
+            case ProcessorMode.DIRECT:
+                this._syncParams(params);
+                const directResult = this.wasmModule.processImage(imageData, this.wasmParams);
+                return new Blob([directResult], { type: 'image/png' });
+                
+            default:
+                throw new Error('Invalid processor mode');
         }
     }
     
@@ -267,20 +482,34 @@ class ChromaProcessor {
             throw new Error('Processor not ready');
         }
         
-        if (this.useWorker) {
+        // Shared/Worker モードはWorker経由
+        if (this.mode === ProcessorMode.WORKER) {
             return await this._sendToWorker('info', {
                 imageData: imageData.buffer
             });
         } else {
+            // Direct モードはメインスレッドで
             return this.wasmModule.getImageInfo(imageData);
         }
     }
     
     /**
-     * Workerを使用しているかどうか
+     * 現在のモードを取得
      */
-    isUsingWorker() {
-        return this.useWorker;
+    getMode() {
+        return this.mode;
+    }
+    
+    /**
+     * モード表示用のラベル
+     */
+    getModeLabel() {
+        switch (this.mode) {
+            case ProcessorMode.SHARED: return 'SharedArrayBuffer';
+            case ProcessorMode.WORKER: return 'Worker';
+            case ProcessorMode.DIRECT: return 'Direct';
+            default: return 'Unknown';
+        }
     }
     
     /**
@@ -291,6 +520,10 @@ class ChromaProcessor {
             this.worker.terminate();
             this.worker = null;
         }
+        this.sharedBuffer = null;
+        this.controlView = null;
+        this.paramView = null;
+        this.dataView = null;
         this.wasmModule = null;
         this.wasmParams = null;
         this.ready = false;
@@ -364,7 +597,7 @@ class ChromaApp {
     initState() {
         // Image state
         this.originalFile = null;
-        this.originalImageData = null;  // Uint8Array for WASM
+        this.originalImageData = null;
         this.imageWidth = 0;
         this.imageHeight = 0;
         
@@ -374,9 +607,9 @@ class ChromaApp {
         this.maxZoom = 8;
         this.panX = 0;
         this.panY = 0;
-        this.viewMode = 'compare'; // 'compare' | 'original' | 'preview'
-        this.sliderRatio = 0.5; // 0.0 - 1.0 (viewport比率)
-        this.bgMode = 'checker'; // 'checker' | 'white' | 'black' | 'custom'
+        this.viewMode = 'compare';
+        this.sliderRatio = 0.5;
+        this.bgMode = 'checker';
         
         // Interaction state
         this.isDragging = false;
@@ -436,7 +669,7 @@ class ChromaApp {
         document.addEventListener('pointermove', (e) => this.handlePointerMove(e));
         document.addEventListener('pointerup', (e) => this.handlePointerUp(e));
         
-        // Compare slider (separate handler)
+        // Compare slider
         this.compareSlider.addEventListener('pointerdown', (e) => this.handleSliderPointerDown(e));
         
         // Toolbar buttons
@@ -501,7 +734,7 @@ class ChromaApp {
         // Window resize
         window.addEventListener('resize', () => this.updateCompareView());
         
-        // Viewport drag & drop (エディタ画面でも画像をドロップ可能)
+        // Viewport drag & drop
         this.viewport.addEventListener('dragover', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -516,13 +749,11 @@ class ChromaApp {
     }
 
     async loadConfig() {
-        // WASM/Worker初期化
         try {
             await this.processor.init();
             const versionEl = document.getElementById('version');
             if (versionEl) {
-                const workerMode = this.processor.isUsingWorker() ? ' (Worker)' : '';
-                versionEl.textContent = this.processor.version + workerMode;
+                versionEl.textContent = `${this.processor.version} (${this.processor.getModeLabel()})`;
             }
         } catch (e) {
             console.error('Failed to initialize processor:', e);
@@ -552,7 +783,7 @@ class ChromaApp {
     handleFileSelect(e) {
         if (e.target.files.length > 0) {
             this.loadFile(e.target.files[0]);
-            e.target.value = ''; // リセットして同じファイルも選択可能に
+            e.target.value = '';
         }
     }
 
@@ -564,11 +795,9 @@ class ChromaApp {
 
         this.originalFile = file;
         
-        // 画像データをUint8Arrayとして保持（WASM用）
         const buffer = await file.arrayBuffer();
         this.originalImageData = new Uint8Array(buffer);
 
-        // Load image to get dimensions
         const img = new Image();
         img.src = URL.createObjectURL(file);
         
@@ -577,31 +806,24 @@ class ChromaApp {
         this.imageWidth = img.naturalWidth;
         this.imageHeight = img.naturalHeight;
         
-        // Set original image with explicit size
         this.originalImage.src = img.src;
         this.originalImage.style.width = this.imageWidth + 'px';
         this.originalImage.style.height = this.imageHeight + 'px';
         
-        // Set preview image with same size as original
         this.previewImage.style.width = this.imageWidth + 'px';
         this.previewImage.style.height = this.imageHeight + 'px';
         
-        // Set container size
         this.container.style.width = this.imageWidth + 'px';
         this.container.style.height = this.imageHeight + 'px';
         
-        // Switch to editor
         this.uploadSection.hidden = true;
         this.editorSection.hidden = false;
         
-        // Update status
         this.statusFilename.textContent = file.name;
         this.statusDimensions.textContent = `${this.imageWidth} × ${this.imageHeight}`;
         
-        // Reset slider position
         this.sliderRatio = 0.5;
         
-        // Fit to view and update preview
         requestAnimationFrame(() => {
             this.zoomToFit();
             this.updatePreview();
@@ -613,12 +835,10 @@ class ChromaApp {
     setBgMode(mode, customColor = null) {
         this.bgMode = mode;
         
-        // Update buttons
         this.bgBtns.forEach(btn => {
             btn.classList.toggle('active', btn.dataset.bg === mode);
         });
         
-        // Update viewport class
         this.viewport.classList.remove('bg-checker', 'bg-white', 'bg-black');
         
         if (mode === 'checker') {
@@ -947,7 +1167,6 @@ class ChromaApp {
         this.loadingOverlay.hidden = false;
 
         try {
-            // プロセッサ経由でプレビュー生成（Worker or メインスレッド）
             const blob = await this.processor.processPreview(
                 this.originalImageData,
                 this.getParams(),
@@ -993,13 +1212,11 @@ class ChromaApp {
         this.loadingOverlay.hidden = false;
 
         try {
-            // プロセッサ経由で処理（Worker or メインスレッド）
             const blob = await this.processor.processImage(
                 this.originalImageData,
                 this.getParams()
             );
 
-            // ダウンロード
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
@@ -1033,4 +1250,4 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Export for module usage
-export { ChromaProcessor, processor };
+export { ChromaProcessor, processor, ProcessorMode };

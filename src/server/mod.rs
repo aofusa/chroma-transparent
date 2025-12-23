@@ -17,7 +17,7 @@ pub use storage::StorageManager;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use log::{debug, info};
+use log::{debug, info, warn};
 use tokio::sync::Mutex;
 
 /// サーバを起動
@@ -39,10 +39,56 @@ pub async fn run(config: ServerConfig) -> anyhow::Result<()> {
         .parse()
         .map_err(|e| anyhow::anyhow!("Invalid address: {}", e))?;
 
-    info!("Server started at http://{}", addr);
+    // Graceful Shutdown用のシグナル受信
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
 
-    // サーバを起動
-    warp::serve(routes).run(addr).await;
+    // シグナルハンドラを起動
+    tokio::spawn(async move {
+        if let Err(e) = shutdown_signal().await {
+            warn!("Error waiting for shutdown signal: {}", e);
+        }
+        let _ = tx.send(());
+    });
+
+    info!("Server started at http://{}", addr);
+    info!("Press Ctrl+C to stop");
+
+    // Graceful Shutdownでサーバを起動
+    let (_, server) = warp::serve(routes)
+        .bind_with_graceful_shutdown(addr, async {
+            rx.await.ok();
+        });
+
+    server.await;
+
+    info!("Server stopped gracefully");
+    Ok(())
+}
+
+/// シャットダウンシグナルを待機
+async fn shutdown_signal() -> anyhow::Result<()> {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+
+        let mut sigint = signal(SignalKind::interrupt())?;
+        let mut sigterm = signal(SignalKind::terminate())?;
+
+        tokio::select! {
+            _ = sigint.recv() => {
+                info!("Received SIGINT, initiating graceful shutdown...");
+            }
+            _ = sigterm.recv() => {
+                info!("Received SIGTERM, initiating graceful shutdown...");
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        tokio::signal::ctrl_c().await?;
+        info!("Received Ctrl+C, initiating graceful shutdown...");
+    }
 
     Ok(())
 }

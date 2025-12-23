@@ -1,26 +1,40 @@
 //! アルファチャンネル処理（最適化版）
 //!
-//! 改善案A: Rayon並列処理
+//! 改善案A: Rayon並列処理（parallel feature有効時）
 //! 改善案D: バッファ直接操作
-//! 改善案E: SIMD最適化
+//! 改善案E: SIMD最適化（非WASM環境のみ）
 
 use image::{GrayImage, RgbaImage};
+
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
+#[cfg(not(target_arch = "wasm32"))]
 use super::simd;
 
 /// マスクからアルファチャンネルを生成
 ///
 /// マスク（白=クロマキー対象）を反転してアルファチャンネルに変換
 ///
-/// 改善案E: SIMD最適化で高速化
+/// 改善案E: SIMD最適化で高速化（非WASM環境）
 pub fn create_alpha_from_mask(mask: &GrayImage) -> GrayImage {
     let (width, height) = mask.dimensions();
     let src = mask.as_raw();
     let mut dst = vec![0u8; src.len()];
 
-    // SIMDで反転（改善案E）
-    simd::invert_mask_simd(src, &mut dst);
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        // SIMDで反転（改善案E）
+        simd::invert_mask_simd(src, &mut dst);
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        // スカラー処理（WASM）
+        for (d, s) in dst.iter_mut().zip(src.iter()) {
+            *d = 255 - s;
+        }
+    }
 
     GrayImage::from_raw(width, height, dst).expect("Failed to create alpha channel")
 }
@@ -29,12 +43,21 @@ pub fn create_alpha_from_mask(mask: &GrayImage) -> GrayImage {
 ///
 /// 改善案A: 並列処理
 /// 改善案D: バッファ直接操作
-/// 改善案E: SIMD最適化
+/// 改善案E: SIMD最適化（非WASM環境）
 pub fn apply_alpha(image: &RgbaImage, alpha: &GrayImage) -> RgbaImage {
     let mut result = image.clone();
 
-    // SIMDでアルファ適用（改善案E）
-    simd::apply_alpha_simd(result.as_mut(), alpha.as_raw());
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        // SIMDでアルファ適用（改善案E）
+        simd::apply_alpha_simd(result.as_mut(), alpha.as_raw());
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        // スカラー処理（WASM）
+        apply_alpha_scalar(result.as_mut(), alpha.as_raw());
+    }
 
     result
 }
@@ -43,13 +66,33 @@ pub fn apply_alpha(image: &RgbaImage, alpha: &GrayImage) -> RgbaImage {
 ///
 /// 改善案G: インプレース処理
 pub fn apply_alpha_inplace(image: &mut RgbaImage, alpha: &GrayImage) {
-    // SIMDでアルファ適用（改善案E）
-    simd::apply_alpha_simd(image.as_mut(), alpha.as_raw());
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        // SIMDでアルファ適用（改善案E）
+        simd::apply_alpha_simd(image.as_mut(), alpha.as_raw());
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        // スカラー処理（WASM）
+        apply_alpha_scalar(image.as_mut(), alpha.as_raw());
+    }
+}
+
+/// スカラー処理: アルファ適用
+#[cfg(target_arch = "wasm32")]
+fn apply_alpha_scalar(rgba: &mut [u8], alpha: &[u8]) {
+    for (i, &a) in alpha.iter().enumerate() {
+        if i * 4 + 3 < rgba.len() {
+            rgba[i * 4 + 3] = a;
+        }
+    }
 }
 
 /// マスクからアルファチャンネルを生成（並列版）
 ///
 /// 改善案A: Rayon並列処理
+#[cfg(feature = "parallel")]
 pub fn create_alpha_from_mask_parallel(mask: &GrayImage) -> GrayImage {
     let (width, height) = mask.dimensions();
     let w = width as usize;
@@ -61,6 +104,14 @@ pub fn create_alpha_from_mask_parallel(mask: &GrayImage) -> GrayImage {
         .collect();
 
     GrayImage::from_raw(width, height, result).expect("Failed to create alpha channel")
+}
+
+/// マスクからアルファチャンネルを生成（シーケンシャル版）
+#[cfg(not(feature = "parallel"))]
+#[allow(dead_code)]
+pub fn create_alpha_from_mask_parallel(mask: &GrayImage) -> GrayImage {
+    // parallel無効時は通常の関数にフォールバック
+    create_alpha_from_mask(mask)
 }
 
 #[cfg(test)]

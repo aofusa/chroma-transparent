@@ -8,10 +8,20 @@ license = "Apache-2.0"
 keywords = ["chroma-key", "transparent", "image", "png", "cli"]
 categories = ["command-line-utilities", "multimedia::images"]
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [features]
-default = []
+default = ["cli", "parallel"]
+# CLI機能（デフォルト有効）
+cli = ["dep:clap", "dep:anyhow", "dep:env_logger"]
+# 並列処理（WASM以外で有効）
+parallel = ["dep:rayon"]
+# 動画機能
 video = ["dep:tempfile"]
+# サーバ機能
 server = [
+    "cli",
     "dep:warp",
     "dep:tokio",
     "dep:serde",
@@ -22,23 +32,37 @@ server = [
     "dep:bytes",
     "dep:tempfile",
 ]
-full = ["video", "server"]
+# WASM機能
+wasm = [
+    "dep:wasm-bindgen",
+    "dep:js-sys",
+    "dep:web-sys",
+    "dep:console_error_panic_hook",
+    "dep:serde",
+    "dep:serde-wasm-bindgen",
+]
+# フル機能（CLI + サーバ + 動画）
+full = ["cli", "parallel", "video", "server"]
 
 [dependencies]
 image = "0.25"
-clap = { version = "4", features = ["derive"] }
-anyhow = "1"
 thiserror = "1"
 log = "0.4"
-env_logger = "0.11"
-rayon = "1.10"
+
+# CLI機能用の依存関係
+clap = { version = "4", features = ["derive"], optional = true }
+anyhow = { version = "1", optional = true }
+env_logger = { version = "0.11", optional = true }
+
+# 並列処理 (WASM未対応)
+rayon = { version = "1.10", optional = true }
 
 # 動画機能用の依存関係 (feature = "video")
 tempfile = { version = "3", optional = true }
 
 # サーバ機能用の依存関係 (feature = "server")
 warp = { version = "0.3", optional = true }
-tokio = { version = "1", features = ["full"], optional = true }
+tokio = { version = "1", features = ["full", "signal"], optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
 sha2 = { version = "0.10", optional = true }
@@ -46,9 +70,27 @@ chrono = { version = "0.4", optional = true }
 futures = { version = "0.3", optional = true }
 bytes = { version = "1", optional = true }
 
-# アロケータ (macOS, FreeBSD以外で使用)
-[target.'cfg(not(any(target_os = "macos", target_os = "freebsd")))'.dependencies]
+# WASM機能用の依存関係
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
+web-sys = { version = "0.3", optional = true, features = [
+    "console",
+    "Blob",
+    "File",
+    "FileReader",
+    "Url",
+] }
+console_error_panic_hook = { version = "0.1", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+
+# アロケータ (macOS, FreeBSD, WASM以外で使用)
+[target.'cfg(not(any(target_os = "macos", target_os = "freebsd", target_arch = "wasm32")))'.dependencies]
 mimalloc = "0.1"
+
+[[bin]]
+name = "chroma-transparent"
+path = "src/main.rs"
+required-features = ["cli"]
 
 [dev-dependencies]
 tempfile = "3"

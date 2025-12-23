@@ -1,5 +1,6 @@
 //! 処理パラメータ設定
 
+#[cfg(feature = "cli")]
 use crate::cli::Args;
 use crate::color::Rgb;
 use crate::error::{ChromaError, Result};
@@ -94,6 +95,7 @@ impl ProcessConfig {
     }
 
     /// CLIからConfigを構築
+    #[cfg(feature = "cli")]
     pub fn from_cli(args: &Args) -> Result<Self> {
         // HEXコードまたは色名を受け付ける
         let chroma_color = Rgb::from_color_spec(&args.color)?;

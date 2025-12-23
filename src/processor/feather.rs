@@ -1,9 +1,11 @@
 //! フェザリング（ガウシアンブラー）（最適化版）
 //!
-//! 改善案A: Rayon並列処理
+//! 改善案A: Rayon並列処理（parallel feature有効時）
 //! 改善案D: バッファ直接操作
 
 use image::GrayImage;
+
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 /// ガウシアンブラーでアルファチャンネルをフェザリング
@@ -38,57 +40,75 @@ fn gaussian_blur(image: &GrayImage, kernel_size: u32, sigma: f32) -> GrayImage {
     let h = height as usize;
     let src = image.as_raw();
 
-    // 水平方向のブラー（並列処理）
+    // 水平方向のブラー
+    #[cfg(feature = "parallel")]
     let horizontal: Vec<u8> = (0..h)
         .into_par_iter()
-        .flat_map(|y| {
-            let mut row = Vec::with_capacity(w);
-            for x in 0..w {
-                let mut sum = 0.0f32;
-                let mut weight_sum = 0.0f32;
-
-                for i in -radius..=radius {
-                    let nx = x as i32 + i;
-                    if nx >= 0 && nx < w as i32 {
-                        let val = src[y * w + nx as usize] as f32;
-                        let weight = kernel[(i + radius) as usize];
-                        sum += val * weight;
-                        weight_sum += weight;
-                    }
-                }
-
-                row.push((sum / weight_sum).round() as u8);
-            }
-            row
-        })
+        .flat_map(|y| blur_row_horizontal(y, w, src, &kernel, radius))
         .collect();
 
-    // 垂直方向のブラー（並列処理）
+    #[cfg(not(feature = "parallel"))]
+    let horizontal: Vec<u8> = (0..h)
+        .flat_map(|y| blur_row_horizontal(y, w, src, &kernel, radius))
+        .collect();
+
+    // 垂直方向のブラー
+    #[cfg(feature = "parallel")]
     let result: Vec<u8> = (0..h)
         .into_par_iter()
-        .flat_map(|y| {
-            let mut row = Vec::with_capacity(w);
-            for x in 0..w {
-                let mut sum = 0.0f32;
-                let mut weight_sum = 0.0f32;
+        .flat_map(|y| blur_row_vertical(y, w, h, &horizontal, &kernel, radius))
+        .collect();
 
-                for i in -radius..=radius {
-                    let ny = y as i32 + i;
-                    if ny >= 0 && ny < h as i32 {
-                        let val = horizontal[ny as usize * w + x] as f32;
-                        let weight = kernel[(i + radius) as usize];
-                        sum += val * weight;
-                        weight_sum += weight;
-                    }
-                }
-
-                row.push((sum / weight_sum).round() as u8);
-            }
-            row
-        })
+    #[cfg(not(feature = "parallel"))]
+    let result: Vec<u8> = (0..h)
+        .flat_map(|y| blur_row_vertical(y, w, h, &horizontal, &kernel, radius))
         .collect();
 
     GrayImage::from_raw(width, height, result).expect("Failed to create image")
+}
+
+/// 水平方向のブラー（1行）
+fn blur_row_horizontal(y: usize, w: usize, src: &[u8], kernel: &[f32], radius: i32) -> Vec<u8> {
+    let mut row = Vec::with_capacity(w);
+    for x in 0..w {
+        let mut sum = 0.0f32;
+        let mut weight_sum = 0.0f32;
+
+        for i in -radius..=radius {
+            let nx = x as i32 + i;
+            if nx >= 0 && nx < w as i32 {
+                let val = src[y * w + nx as usize] as f32;
+                let weight = kernel[(i + radius) as usize];
+                sum += val * weight;
+                weight_sum += weight;
+            }
+        }
+
+        row.push((sum / weight_sum).round() as u8);
+    }
+    row
+}
+
+/// 垂直方向のブラー（1行）
+fn blur_row_vertical(y: usize, w: usize, h: usize, src: &[u8], kernel: &[f32], radius: i32) -> Vec<u8> {
+    let mut row = Vec::with_capacity(w);
+    for x in 0..w {
+        let mut sum = 0.0f32;
+        let mut weight_sum = 0.0f32;
+
+        for i in -radius..=radius {
+            let ny = y as i32 + i;
+            if ny >= 0 && ny < h as i32 {
+                let val = src[ny as usize * w + x] as f32;
+                let weight = kernel[(i + radius) as usize];
+                sum += val * weight;
+                weight_sum += weight;
+            }
+        }
+
+        row.push((sum / weight_sum).round() as u8);
+    }
+    row
 }
 
 /// 1次元ガウシアンカーネルを生成

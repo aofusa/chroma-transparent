@@ -1,10 +1,12 @@
 //! モルフォロジー演算（最適化版）
 //!
-//! 改善案A: Rayon並列処理
+//! 改善案A: Rayon並列処理（parallel feature有効時）
 //! 改善案C: ダブルバッファリング（メモリ効率改善）
 //! 改善案D: バッファ直接操作
 
 use image::GrayImage;
+
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 /// 3x3カーネルでの収縮処理
@@ -66,34 +68,52 @@ fn erode_into(src: &[u8], dst: &mut [u8], width: u32, height: u32) {
     let w = width as usize;
     let h = height as usize;
 
-    // 並列処理（改善案A）
-    dst.par_chunks_mut(w)
-        .enumerate()
-        .for_each(|(y, row)| {
-            for x in 0..w {
-                // 3x3カーネル内の最小値を取得
-                let mut min_val = 255u8;
+    #[cfg(feature = "parallel")]
+    {
+        // 並列処理（改善案A）
+        dst.par_chunks_mut(w)
+            .enumerate()
+            .for_each(|(y, row)| {
+                erode_row(src, row, y, w, h);
+            });
+    }
 
-                for dy in 0..3 {
-                    let ny = y.saturating_add(dy).saturating_sub(1);
-                    if ny >= h {
-                        continue;
-                    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        // シーケンシャル処理
+        for y in 0..h {
+            let row = &mut dst[y * w..(y + 1) * w];
+            erode_row(src, row, y, w, h);
+        }
+    }
+}
 
-                    for dx in 0..3 {
-                        let nx = x.saturating_add(dx).saturating_sub(1);
-                        if nx >= w {
-                            continue;
-                        }
+/// 1行の収縮処理
+#[inline]
+fn erode_row(src: &[u8], row: &mut [u8], y: usize, w: usize, h: usize) {
+    for x in 0..w {
+        // 3x3カーネル内の最小値を取得
+        let mut min_val = 255u8;
 
-                        let val = src[ny * w + nx];
-                        min_val = min_val.min(val);
-                    }
+        for dy in 0..3 {
+            let ny = y.saturating_add(dy).saturating_sub(1);
+            if ny >= h {
+                continue;
+            }
+
+            for dx in 0..3 {
+                let nx = x.saturating_add(dx).saturating_sub(1);
+                if nx >= w {
+                    continue;
                 }
 
-                row[x] = min_val;
+                let val = src[ny * w + nx];
+                min_val = min_val.min(val);
             }
-        });
+        }
+
+        row[x] = min_val;
+    }
 }
 
 /// 1回の膨張処理（改善案A: 並列化、改善案D: バッファ直接操作）
@@ -101,34 +121,52 @@ fn dilate_into(src: &[u8], dst: &mut [u8], width: u32, height: u32) {
     let w = width as usize;
     let h = height as usize;
 
-    // 並列処理（改善案A）
-    dst.par_chunks_mut(w)
-        .enumerate()
-        .for_each(|(y, row)| {
-            for x in 0..w {
-                // 3x3カーネル内の最大値を取得
-                let mut max_val = 0u8;
+    #[cfg(feature = "parallel")]
+    {
+        // 並列処理（改善案A）
+        dst.par_chunks_mut(w)
+            .enumerate()
+            .for_each(|(y, row)| {
+                dilate_row(src, row, y, w, h);
+            });
+    }
 
-                for dy in 0..3 {
-                    let ny = y.saturating_add(dy).saturating_sub(1);
-                    if ny >= h {
-                        continue;
-                    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        // シーケンシャル処理
+        for y in 0..h {
+            let row = &mut dst[y * w..(y + 1) * w];
+            dilate_row(src, row, y, w, h);
+        }
+    }
+}
 
-                    for dx in 0..3 {
-                        let nx = x.saturating_add(dx).saturating_sub(1);
-                        if nx >= w {
-                            continue;
-                        }
+/// 1行の膨張処理
+#[inline]
+fn dilate_row(src: &[u8], row: &mut [u8], y: usize, w: usize, h: usize) {
+    for x in 0..w {
+        // 3x3カーネル内の最大値を取得
+        let mut max_val = 0u8;
 
-                        let val = src[ny * w + nx];
-                        max_val = max_val.max(val);
-                    }
+        for dy in 0..3 {
+            let ny = y.saturating_add(dy).saturating_sub(1);
+            if ny >= h {
+                continue;
+            }
+
+            for dx in 0..3 {
+                let nx = x.saturating_add(dx).saturating_sub(1);
+                if nx >= w {
+                    continue;
                 }
 
-                row[x] = max_val;
+                let val = src[ny * w + nx];
+                max_val = max_val.max(val);
             }
-        });
+        }
+
+        row[x] = max_val;
+    }
 }
 
 #[cfg(test)]

@@ -1,11 +1,13 @@
 //! マスク生成（最適化版）
 //!
-//! 改善案A: Rayon並列処理
+//! 改善案A: Rayon並列処理（parallel feature有効時）
 //! 改善案B: RGB距離による事前フィルタリング
 //! 改善案D: バッファ直接操作
 //! 改善案F: LUTによるHSV変換高速化
 
 use image::{GrayImage, RgbaImage};
+
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 use crate::color::{rgb_distance_squared, rgb_to_hsv, HsvLut, Rgb};
@@ -34,37 +36,55 @@ pub fn create_chroma_mask(image: &RgbaImage, target_color: &Rgb, tolerance: f32)
     let src = image.as_raw();
 
     // 並列処理でマスク生成（改善案A）
+    #[cfg(feature = "parallel")]
     let mask_data: Vec<u8> = (0..height)
         .into_par_iter()
-        .flat_map(|y| {
-            let mut row = Vec::with_capacity(width as usize);
-            for x in 0..width {
-                let idx = ((y * width + x) * 4) as usize;
-                let r = src[idx];
-                let g = src[idx + 1];
-                let b = src[idx + 2];
+        .flat_map(|y| process_mask_row(y, width, src, &lut, target_color, &target_hsv, tolerance, rgb_threshold_squared))
+        .collect();
 
-                let pixel_rgb = Rgb::new(r, g, b);
-
-                // RGB距離で事前フィルタリング（改善案B）
-                // 明らかに異なる色は詳細判定をスキップ
-                let is_chroma = if rgb_distance_squared(&pixel_rgb, target_color)
-                    > rgb_threshold_squared
-                {
-                    false
-                } else {
-                    // LUTでHSV取得（改善案F）
-                    let pixel_hsv = lut.get(&pixel_rgb);
-                    pixel_hsv.is_within_tolerance(&target_hsv, tolerance)
-                };
-
-                row.push(if is_chroma { 255 } else { 0 });
-            }
-            row
-        })
+    #[cfg(not(feature = "parallel"))]
+    let mask_data: Vec<u8> = (0..height)
+        .flat_map(|y| process_mask_row(y, width, src, &lut, target_color, &target_hsv, tolerance, rgb_threshold_squared))
         .collect();
 
     GrayImage::from_raw(width, height, mask_data).expect("Failed to create mask image")
+}
+
+/// 1行分のマスクデータを処理
+fn process_mask_row(
+    y: u32,
+    width: u32,
+    src: &[u8],
+    lut: &HsvLut,
+    target_color: &Rgb,
+    target_hsv: &crate::color::Hsv,
+    tolerance: f32,
+    rgb_threshold_squared: u32,
+) -> Vec<u8> {
+    let mut row = Vec::with_capacity(width as usize);
+    for x in 0..width {
+        let idx = ((y * width + x) * 4) as usize;
+        let r = src[idx];
+        let g = src[idx + 1];
+        let b = src[idx + 2];
+
+        let pixel_rgb = Rgb::new(r, g, b);
+
+        // RGB距離で事前フィルタリング（改善案B）
+        // 明らかに異なる色は詳細判定をスキップ
+        let is_chroma = if rgb_distance_squared(&pixel_rgb, target_color)
+            > rgb_threshold_squared
+        {
+            false
+        } else {
+            // LUTでHSV取得（改善案F）
+            let pixel_hsv = lut.get(&pixel_rgb);
+            pixel_hsv.is_within_tolerance(target_hsv, tolerance)
+        };
+
+        row.push(if is_chroma { 255 } else { 0 });
+    }
+    row
 }
 
 #[cfg(test)]

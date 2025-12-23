@@ -20,26 +20,42 @@
 //! result.save("output.png").unwrap();
 //! ```
 
-pub mod cli;
+// コアモジュール（すべての環境で利用可能）
 pub mod color;
 pub mod config;
 pub mod error;
 pub mod pipeline;
 pub mod processor;
+
+// CLI専用モジュール（WASM以外）
+#[cfg(feature = "cli")]
+pub mod cli;
+
+#[cfg(feature = "cli")]
 pub mod scanner;
 
+// 動画機能
 #[cfg(feature = "video")]
 pub mod video;
 
+// サーバ機能
 #[cfg(feature = "server")]
 pub mod server;
 
+// WASM機能
+#[cfg(feature = "wasm")]
+pub mod wasm;
+
 // 主要な型を再エクスポート
-pub use cli::Args;
 pub use color::Rgb;
 pub use config::ProcessConfig;
 pub use error::{ChromaError, Result};
 pub use pipeline::ChromaPipeline;
+
+#[cfg(feature = "cli")]
+pub use cli::Args;
+
+#[cfg(feature = "cli")]
 pub use scanner::{ensure_output_directory, ImageScanner};
 
 #[cfg(feature = "video")]
@@ -50,4 +66,8 @@ pub use video::{
 
 #[cfg(feature = "server")]
 pub use server::{ServerConfig, StorageManager};
+
+// WASMエクスポート（wasm feature有効時）
+#[cfg(feature = "wasm")]
+pub use wasm::*;
 

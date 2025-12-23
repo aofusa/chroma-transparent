@@ -1,10 +1,12 @@
 //! Despill処理（最適化版）
 //!
-//! 改善案A: Rayon並列処理
+//! 改善案A: Rayon並列処理（parallel feature有効時）
 //! 改善案D: バッファ直接操作
 //! 改善案G: インプレース処理
 
 use image::{GrayImage, RgbaImage};
+
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 use crate::color::Rgb;
@@ -37,37 +39,54 @@ pub fn despill(image: &mut RgbaImage, mask: &GrayImage, strength: f32, chroma_co
     let raw = image.as_mut();
     let mask_raw = mask.as_raw();
 
-    // 並列処理（改善案A）
-    raw.par_chunks_mut(w * 4)
-        .enumerate()
-        .for_each(|(y, row)| {
-            for x in 0..w {
-                let mask_val = mask_raw[y * w + x];
+    #[cfg(feature = "parallel")]
+    {
+        // 並列処理（改善案A）
+        raw.par_chunks_mut(w * 4)
+            .enumerate()
+            .for_each(|(y, row)| {
+                despill_row(row, y, w, mask_raw, strength, chroma_channel);
+            });
+    }
 
-                // マスク値に基づいてDespill強度を調整
-                // マスク値が低い（エッジ周辺）ほど強くDespill
-                let edge_factor = 1.0 - (mask_val as f32 / 255.0);
-                if edge_factor <= 0.01 {
-                    continue;
-                }
+    #[cfg(not(feature = "parallel"))]
+    {
+        // シーケンシャル処理
+        for y in 0..(raw.len() / (w * 4)) {
+            let row = &mut raw[y * w * 4..(y + 1) * w * 4];
+            despill_row(row, y, w, mask_raw, strength, chroma_channel);
+        }
+    }
+}
 
-                let idx = x * 4;
-                let r = row[idx];
-                let g = row[idx + 1];
-                let b = row[idx + 2];
+/// 1行のDespill処理
+fn despill_row(row: &mut [u8], y: usize, w: usize, mask_raw: &[u8], strength: f32, chroma_channel: ChromaChannel) {
+    for x in 0..w {
+        let mask_val = mask_raw[y * w + x];
 
-                let (new_r, new_g, new_b) = match chroma_channel {
-                    ChromaChannel::Green => despill_green(r, g, b, strength * edge_factor),
-                    ChromaChannel::Blue => despill_blue(r, g, b, strength * edge_factor),
-                    ChromaChannel::Red => despill_red(r, g, b, strength * edge_factor),
-                };
+        // マスク値に基づいてDespill強度を調整
+        // マスク値が低い（エッジ周辺）ほど強くDespill
+        let edge_factor = 1.0 - (mask_val as f32 / 255.0);
+        if edge_factor <= 0.01 {
+            continue;
+        }
 
-                // インプレース更新（改善案G）
-                row[idx] = new_r;
-                row[idx + 1] = new_g;
-                row[idx + 2] = new_b;
-            }
-        });
+        let idx = x * 4;
+        let r = row[idx];
+        let g = row[idx + 1];
+        let b = row[idx + 2];
+
+        let (new_r, new_g, new_b) = match chroma_channel {
+            ChromaChannel::Green => despill_green(r, g, b, strength * edge_factor),
+            ChromaChannel::Blue => despill_blue(r, g, b, strength * edge_factor),
+            ChromaChannel::Red => despill_red(r, g, b, strength * edge_factor),
+        };
+
+        // インプレース更新（改善案G）
+        row[idx] = new_r;
+        row[idx + 1] = new_g;
+        row[idx + 2] = new_b;
+    }
 }
 
 /// クロマ色の主成分を判定

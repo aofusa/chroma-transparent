@@ -473,20 +473,6 @@ class ChromaProcessor {
                 }
             }
         }
-        if (params.adaptiveTolerance !== undefined) {
-            this.wasmParams.setAdaptiveToleranceEnabled(params.adaptiveTolerance.enabled || false);
-            if (params.adaptiveTolerance.enabled) {
-                if (params.adaptiveTolerance.gridW !== undefined) {
-                    this.wasmParams.setAdaptiveToleranceGridW(parseInt(params.adaptiveTolerance.gridW, 10));
-                }
-                if (params.adaptiveTolerance.gridH !== undefined) {
-                    this.wasmParams.setAdaptiveToleranceGridH(parseInt(params.adaptiveTolerance.gridH, 10));
-                }
-                if (params.adaptiveTolerance.sensitivity !== undefined) {
-                    this.wasmParams.setAdaptiveToleranceSensitivity(parseFloat(params.adaptiveTolerance.sensitivity));
-                }
-            }
-        }
     }
     
     // === 統一API ===

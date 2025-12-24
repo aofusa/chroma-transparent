@@ -648,6 +648,58 @@ export class WasmProcessParams {
         const ret = wasm.wasmprocessparams_getSharpenThreshold(this.__wbg_ptr);
         return ret;
     }
+    /**
+     * @param {boolean} v
+     */
+    setAdaptiveToleranceEnabled(v) {
+        wasm.wasmprocessparams_setAdaptiveToleranceEnabled(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {boolean}
+     */
+    getAdaptiveToleranceEnabled() {
+        const ret = wasm.wasmprocessparams_getAdaptiveToleranceEnabled(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * @param {number} v
+     */
+    setAdaptiveToleranceGridW(v) {
+        wasm.wasmprocessparams_setAdaptiveToleranceGridW(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {number}
+     */
+    getAdaptiveToleranceGridW() {
+        const ret = wasm.wasmprocessparams_getAdaptiveToleranceGridW(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @param {number} v
+     */
+    setAdaptiveToleranceGridH(v) {
+        wasm.wasmprocessparams_setAdaptiveToleranceGridH(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {number}
+     */
+    getAdaptiveToleranceGridH() {
+        const ret = wasm.wasmprocessparams_getAdaptiveToleranceGridH(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @param {number} v
+     */
+    setAdaptiveToleranceSensitivity(v) {
+        wasm.wasmprocessparams_setAdaptiveToleranceSensitivity(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {number}
+     */
+    getAdaptiveToleranceSensitivity() {
+        const ret = wasm.wasmprocessparams_getAdaptiveToleranceSensitivity(this.__wbg_ptr);
+        return ret;
+    }
 }
 
 async function __wbg_load(module, imports) {

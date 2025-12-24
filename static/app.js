@@ -826,6 +826,76 @@ class ChromaApp {
             });
         });
         
+        // 色空間選択
+        this.colorSpaceSelect.addEventListener('change', () => this.schedulePreview());
+        
+        // 多色検出
+        this.multiColorEnabled.addEventListener('change', (e) => {
+            this.multiColorList.hidden = !e.target.checked;
+            this.schedulePreview();
+        });
+        this.btnAddColor.addEventListener('click', () => this.addMultiColor());
+        
+        // バイラテラルフィルタ
+        this.bilateralEnabled.addEventListener('change', (e) => {
+            this.bilateralParams.hidden = !e.target.checked;
+            this.schedulePreview();
+        });
+        [this.bilateralSpatialSigma, this.bilateralColorSigma, this.bilateralRadius].forEach(slider => {
+            slider.addEventListener('input', () => {
+                this.updateSliderValue(slider);
+                this.schedulePreview();
+            });
+        });
+        
+        // マルチスケール処理
+        this.multiscaleEnabled.addEventListener('change', (e) => {
+            this.multiscaleParams.hidden = !e.target.checked;
+            this.schedulePreview();
+        });
+        [this.multiscaleLevels, this.multiscaleScaleFactor].forEach(slider => {
+            slider.addEventListener('input', () => {
+                this.updateSliderValue(slider);
+                this.schedulePreview();
+            });
+        });
+        
+        // マットエッジ最適化
+        this.edgeOptimizationEnabled.addEventListener('change', (e) => {
+            this.edgeOptimizationParams.hidden = !e.target.checked;
+            this.schedulePreview();
+        });
+        [this.edgeThreshold, this.edgeSmoothness].forEach(slider => {
+            slider.addEventListener('input', () => {
+                this.updateSliderValue(slider);
+                this.schedulePreview();
+            });
+        });
+        
+        // 影の処理
+        this.shadowRemovalEnabled.addEventListener('change', (e) => {
+            this.shadowRemovalParams.hidden = !e.target.checked;
+            this.schedulePreview();
+        });
+        [this.shadowThreshold, this.shadowRemovalStrength].forEach(slider => {
+            slider.addEventListener('input', () => {
+                this.updateSliderValue(slider);
+                this.schedulePreview();
+            });
+        });
+        
+        // エッジシャープニング
+        this.sharpenEnabled.addEventListener('change', (e) => {
+            this.sharpenParams.hidden = !e.target.checked;
+            this.schedulePreview();
+        });
+        [this.sharpenAmount, this.sharpenRadius, this.sharpenThreshold].forEach(slider => {
+            slider.addEventListener('input', () => {
+                this.updateSliderValue(slider);
+                this.schedulePreview();
+            });
+        });
+        
         // Action buttons
         this.resetBtn.addEventListener('click', () => this.resetParams());
         this.processBtn.addEventListener('click', () => this.processAndDownload());

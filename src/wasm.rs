@@ -26,6 +26,26 @@ pub struct WasmProcessParams {
     despill: f32,
     erode: u32,
     dilate: u32,
+    
+    // 新規フィールド
+    color_space: String,
+    bilateral_enabled: bool,
+    bilateral_spatial_sigma: f32,
+    bilateral_color_sigma: f32,
+    bilateral_radius: u32,
+    multiscale_enabled: bool,
+    multiscale_levels: u32,
+    multiscale_scale_factor: f32,
+    edge_optimization_enabled: bool,
+    edge_threshold: f32,
+    edge_smoothness: f32,
+    shadow_removal_enabled: bool,
+    shadow_threshold: f32,
+    shadow_removal_strength: f32,
+    sharpen_enabled: bool,
+    sharpen_amount: f32,
+    sharpen_radius: f32,
+    sharpen_threshold: f32,
 }
 
 #[wasm_bindgen]
@@ -40,6 +60,26 @@ impl WasmProcessParams {
             despill: 0.7,
             erode: 0,
             dilate: 1,
+            
+            // 新規フィールドのデフォルト値
+            color_space: "hsv".to_string(),
+            bilateral_enabled: false,
+            bilateral_spatial_sigma: 5.0,
+            bilateral_color_sigma: 50.0,
+            bilateral_radius: 5,
+            multiscale_enabled: false,
+            multiscale_levels: 3,
+            multiscale_scale_factor: 0.5,
+            edge_optimization_enabled: false,
+            edge_threshold: 0.1,
+            edge_smoothness: 0.5,
+            shadow_removal_enabled: false,
+            shadow_threshold: 0.3,
+            shadow_removal_strength: 0.7,
+            sharpen_enabled: false,
+            sharpen_amount: 0.5,
+            sharpen_radius: 1.0,
+            sharpen_threshold: 0.0,
         }
     }
 
@@ -124,6 +164,207 @@ impl WasmProcessParams {
         self.despill = 0.7;
         self.erode = 0;
         self.dilate = 1;
+        
+        // 新規フィールドのリセット
+        self.color_space = "hsv".to_string();
+        self.bilateral_enabled = false;
+        self.bilateral_spatial_sigma = 5.0;
+        self.bilateral_color_sigma = 50.0;
+        self.bilateral_radius = 5;
+        self.multiscale_enabled = false;
+        self.multiscale_levels = 3;
+        self.multiscale_scale_factor = 0.5;
+        self.edge_optimization_enabled = false;
+        self.edge_threshold = 0.1;
+        self.edge_smoothness = 0.5;
+        self.shadow_removal_enabled = false;
+        self.shadow_threshold = 0.3;
+        self.shadow_removal_strength = 0.7;
+        self.sharpen_enabled = false;
+        self.sharpen_amount = 0.5;
+        self.sharpen_radius = 1.0;
+        self.sharpen_threshold = 0.0;
+    }
+    
+    // 新規フィールドのgetter/setter
+    #[wasm_bindgen(js_name = setColorSpace)]
+    pub fn set_color_space(&mut self, v: String) {
+        self.color_space = v;
+    }
+    
+    #[wasm_bindgen(js_name = getColorSpace)]
+    pub fn get_color_space(&self) -> String {
+        self.color_space.clone()
+    }
+    
+    #[wasm_bindgen(js_name = setBilateralEnabled)]
+    pub fn set_bilateral_enabled(&mut self, v: bool) {
+        self.bilateral_enabled = v;
+    }
+    
+    #[wasm_bindgen(js_name = getBilateralEnabled)]
+    pub fn get_bilateral_enabled(&self) -> bool {
+        self.bilateral_enabled
+    }
+    
+    #[wasm_bindgen(js_name = setBilateralSpatialSigma)]
+    pub fn set_bilateral_spatial_sigma(&mut self, v: f32) {
+        self.bilateral_spatial_sigma = v.clamp(1.0, 20.0);
+    }
+    
+    #[wasm_bindgen(js_name = getBilateralSpatialSigma)]
+    pub fn get_bilateral_spatial_sigma(&self) -> f32 {
+        self.bilateral_spatial_sigma
+    }
+    
+    #[wasm_bindgen(js_name = setBilateralColorSigma)]
+    pub fn set_bilateral_color_sigma(&mut self, v: f32) {
+        self.bilateral_color_sigma = v.clamp(10.0, 100.0);
+    }
+    
+    #[wasm_bindgen(js_name = getBilateralColorSigma)]
+    pub fn get_bilateral_color_sigma(&self) -> f32 {
+        self.bilateral_color_sigma
+    }
+    
+    #[wasm_bindgen(js_name = setBilateralRadius)]
+    pub fn set_bilateral_radius(&mut self, v: u32) {
+        self.bilateral_radius = v.min(10);
+    }
+    
+    #[wasm_bindgen(js_name = getBilateralRadius)]
+    pub fn get_bilateral_radius(&self) -> u32 {
+        self.bilateral_radius
+    }
+    
+    #[wasm_bindgen(js_name = setMultiscaleEnabled)]
+    pub fn set_multiscale_enabled(&mut self, v: bool) {
+        self.multiscale_enabled = v;
+    }
+    
+    #[wasm_bindgen(js_name = getMultiscaleEnabled)]
+    pub fn get_multiscale_enabled(&self) -> bool {
+        self.multiscale_enabled
+    }
+    
+    #[wasm_bindgen(js_name = setMultiscaleLevels)]
+    pub fn set_multiscale_levels(&mut self, v: u32) {
+        self.multiscale_levels = v.min(5).max(1);
+    }
+    
+    #[wasm_bindgen(js_name = getMultiscaleLevels)]
+    pub fn get_multiscale_levels(&self) -> u32 {
+        self.multiscale_levels
+    }
+    
+    #[wasm_bindgen(js_name = setMultiscaleScaleFactor)]
+    pub fn set_multiscale_scale_factor(&mut self, v: f32) {
+        self.multiscale_scale_factor = v.clamp(0.25, 0.75);
+    }
+    
+    #[wasm_bindgen(js_name = getMultiscaleScaleFactor)]
+    pub fn get_multiscale_scale_factor(&self) -> f32 {
+        self.multiscale_scale_factor
+    }
+    
+    #[wasm_bindgen(js_name = setEdgeOptimizationEnabled)]
+    pub fn set_edge_optimization_enabled(&mut self, v: bool) {
+        self.edge_optimization_enabled = v;
+    }
+    
+    #[wasm_bindgen(js_name = getEdgeOptimizationEnabled)]
+    pub fn get_edge_optimization_enabled(&self) -> bool {
+        self.edge_optimization_enabled
+    }
+    
+    #[wasm_bindgen(js_name = setEdgeThreshold)]
+    pub fn set_edge_threshold(&mut self, v: f32) {
+        self.edge_threshold = v.clamp(0.0, 1.0);
+    }
+    
+    #[wasm_bindgen(js_name = getEdgeThreshold)]
+    pub fn get_edge_threshold(&self) -> f32 {
+        self.edge_threshold
+    }
+    
+    #[wasm_bindgen(js_name = setEdgeSmoothness)]
+    pub fn set_edge_smoothness(&mut self, v: f32) {
+        self.edge_smoothness = v.clamp(0.0, 1.0);
+    }
+    
+    #[wasm_bindgen(js_name = getEdgeSmoothness)]
+    pub fn get_edge_smoothness(&self) -> f32 {
+        self.edge_smoothness
+    }
+    
+    #[wasm_bindgen(js_name = setShadowRemovalEnabled)]
+    pub fn set_shadow_removal_enabled(&mut self, v: bool) {
+        self.shadow_removal_enabled = v;
+    }
+    
+    #[wasm_bindgen(js_name = getShadowRemovalEnabled)]
+    pub fn get_shadow_removal_enabled(&self) -> bool {
+        self.shadow_removal_enabled
+    }
+    
+    #[wasm_bindgen(js_name = setShadowThreshold)]
+    pub fn set_shadow_threshold(&mut self, v: f32) {
+        self.shadow_threshold = v.clamp(0.0, 1.0);
+    }
+    
+    #[wasm_bindgen(js_name = getShadowThreshold)]
+    pub fn get_shadow_threshold(&self) -> f32 {
+        self.shadow_threshold
+    }
+    
+    #[wasm_bindgen(js_name = setShadowRemovalStrength)]
+    pub fn set_shadow_removal_strength(&mut self, v: f32) {
+        self.shadow_removal_strength = v.clamp(0.0, 1.0);
+    }
+    
+    #[wasm_bindgen(js_name = getShadowRemovalStrength)]
+    pub fn get_shadow_removal_strength(&self) -> f32 {
+        self.shadow_removal_strength
+    }
+    
+    #[wasm_bindgen(js_name = setSharpenEnabled)]
+    pub fn set_sharpen_enabled(&mut self, v: bool) {
+        self.sharpen_enabled = v;
+    }
+    
+    #[wasm_bindgen(js_name = getSharpenEnabled)]
+    pub fn get_sharpen_enabled(&self) -> bool {
+        self.sharpen_enabled
+    }
+    
+    #[wasm_bindgen(js_name = setSharpenAmount)]
+    pub fn set_sharpen_amount(&mut self, v: f32) {
+        self.sharpen_amount = v.clamp(0.0, 2.0);
+    }
+    
+    #[wasm_bindgen(js_name = getSharpenAmount)]
+    pub fn get_sharpen_amount(&self) -> f32 {
+        self.sharpen_amount
+    }
+    
+    #[wasm_bindgen(js_name = setSharpenRadius)]
+    pub fn set_sharpen_radius(&mut self, v: f32) {
+        self.sharpen_radius = v.clamp(0.1, 5.0);
+    }
+    
+    #[wasm_bindgen(js_name = getSharpenRadius)]
+    pub fn get_sharpen_radius(&self) -> f32 {
+        self.sharpen_radius
+    }
+    
+    #[wasm_bindgen(js_name = setSharpenThreshold)]
+    pub fn set_sharpen_threshold(&mut self, v: f32) {
+        self.sharpen_threshold = v.clamp(0.0, 1.0);
+    }
+    
+    #[wasm_bindgen(js_name = getSharpenThreshold)]
+    pub fn get_sharpen_threshold(&self) -> f32 {
+        self.sharpen_threshold
     }
 }
 
@@ -251,8 +492,13 @@ fn load_image(data: &[u8]) -> Result<DynamicImage, JsValue> {
 
 /// 処理設定を構築
 fn build_config(params: &WasmProcessParams) -> Result<ProcessConfig, JsValue> {
+    use crate::color::ColorSpace;
+    
     let chroma_color = Rgb::from_color_spec(&params.color)
         .map_err(|e| JsValue::from_str(&format!("Invalid color: {}", e)))?;
+
+    let color_space = ColorSpace::from_str(&params.color_space)
+        .map_err(|e| JsValue::from_str(&format!("Invalid color space: {}", e)))?;
 
     let mut config = ProcessConfig::default();
     config.chroma_color = chroma_color;
@@ -261,6 +507,26 @@ fn build_config(params: &WasmProcessParams) -> Result<ProcessConfig, JsValue> {
     config.despill_strength = params.despill;
     config.erode_iterations = params.erode;
     config.dilate_iterations = params.dilate;
+    
+    // 新規フィールド
+    config.color_space = color_space;
+    config.bilateral_enabled = params.bilateral_enabled;
+    config.bilateral_spatial_sigma = params.bilateral_spatial_sigma;
+    config.bilateral_color_sigma = params.bilateral_color_sigma;
+    config.bilateral_radius = params.bilateral_radius;
+    config.multiscale_enabled = params.multiscale_enabled;
+    config.multiscale_levels = params.multiscale_levels;
+    config.multiscale_scale_factor = params.multiscale_scale_factor;
+    config.edge_optimization_enabled = params.edge_optimization_enabled;
+    config.edge_threshold = params.edge_threshold;
+    config.edge_smoothness = params.edge_smoothness;
+    config.shadow_removal_enabled = params.shadow_removal_enabled;
+    config.shadow_threshold = params.shadow_threshold;
+    config.shadow_removal_strength = params.shadow_removal_strength;
+    config.sharpen_enabled = params.sharpen_enabled;
+    config.sharpen_amount = params.sharpen_amount;
+    config.sharpen_radius = params.sharpen_radius;
+    config.sharpen_threshold = params.sharpen_threshold;
     
     Ok(config)
 }

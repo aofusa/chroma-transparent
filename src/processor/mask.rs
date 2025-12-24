@@ -323,7 +323,7 @@ mod tests {
         image.put_pixel(2, 0, Rgba([0, 0, 255, 255])); // 青
 
         let target = Rgb::new(0, 255, 0);
-        let mask = create_chroma_mask(&image, &target, 0.3);
+        let mask = create_chroma_mask(&image, &target, 0.3, crate::color::ColorSpace::Hsv);
 
         // 緑のピクセルだけがマスクされる
         assert_eq!(mask.get_pixel(0, 0).0[0], 255); // 緑はクロマキー対象
@@ -364,7 +364,7 @@ mod tests {
         }
 
         let target = Rgb::new(0, 255, 0);
-        let mask = create_chroma_mask(&image, &target, 0.3, ColorSpace::Hsv);
+        let mask = create_chroma_mask(&image, &target, 0.3, crate::color::ColorSpace::Hsv);
 
         // 左半分は白、右半分は黒
         assert_eq!(mask.get_pixel(0, 0).0[0], 255);

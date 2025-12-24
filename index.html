@@ -340,6 +340,99 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- 適応的許容範囲セクション -->
+                        <div class="param-section">
+                            <div class="param-section-header">
+                                <input type="checkbox" id="adaptive-tolerance-enabled">
+                                <label for="adaptive-tolerance-enabled">適応的許容範囲</label>
+                            </div>
+                            <div class="param-section-content" id="adaptive-tolerance-params" hidden>
+                                <div class="param-group">
+                                    <label for="adaptive-tolerance-grid-w">グリッド幅 <span id="adaptive-tolerance-grid-w-value">8</span></label>
+                                    <input type="range" id="adaptive-tolerance-grid-w" min="4" max="16" step="1" value="8">
+                                </div>
+                                <div class="param-group">
+                                    <label for="adaptive-tolerance-grid-h">グリッド高さ <span id="adaptive-tolerance-grid-h-value">8</span></label>
+                                    <input type="range" id="adaptive-tolerance-grid-h" min="4" max="16" step="1" value="8">
+                                </div>
+                                <div class="param-group">
+                                    <label for="adaptive-tolerance-sensitivity">感度 <span id="adaptive-tolerance-sensitivity-value">1.00</span></label>
+                                    <input type="range" id="adaptive-tolerance-sensitivity" min="0" max="2" step="0.1" value="1.0">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- エッジ検出方法セクション -->
+                        <div class="param-section">
+                            <div class="param-section-header">
+                                <input type="checkbox" id="edge-optimization-enabled" checked>
+                                <label for="edge-optimization-enabled">エッジ検出方法</label>
+                            </div>
+                            <div class="param-section-content" id="edge-detection-params">
+                                <div class="param-group">
+                                    <label for="edge-detection-method">検出方法</label>
+                                    <select id="edge-detection-method">
+                                        <option value="sobel" selected>Sobel</option>
+                                        <option value="canny">Canny</option>
+                                    </select>
+                                </div>
+                                <div class="param-group" id="canny-params">
+                                    <label for="canny-low-threshold">Canny低閾値 <span id="canny-low-threshold-value">0.10</span></label>
+                                    <input type="range" id="canny-low-threshold" min="0" max="1" step="0.01" value="0.1">
+                                </div>
+                                <div class="param-group" id="canny-params">
+                                    <label for="canny-high-threshold">Canny高閾値 <span id="canny-high-threshold-value">0.30</span></label>
+                                    <input type="range" id="canny-high-threshold" min="0" max="1" step="0.01" value="0.3">
+                                </div>
+                                <div class="param-group" id="canny-params">
+                                    <label for="canny-gaussian-sigma">ガウシアンシグマ <span id="canny-gaussian-sigma-value">1.0</span></label>
+                                    <input type="range" id="canny-gaussian-sigma" min="0.5" max="3" step="0.1" value="1.0">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- デスピル方法セクション -->
+                        <div class="param-section">
+                            <div class="param-section-header">
+                                <label>デスピル方法</label>
+                            </div>
+                            <div class="param-section-content">
+                                <div class="param-group">
+                                    <label for="despill-method">方法</label>
+                                    <select id="despill-method">
+                                        <option value="basic" selected>Basic</option>
+                                        <option value="advanced">Advanced (YUV)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 細線検出セクション -->
+                        <div class="param-section">
+                            <div class="param-section-header">
+                                <input type="checkbox" id="thin-line-detection-enabled">
+                                <label for="thin-line-detection-enabled">細線検出（髪の毛・毛皮）</label>
+                            </div>
+                            <div class="param-section-content" id="thin-line-detection-params" hidden>
+                                <div class="param-group">
+                                    <label for="thin-line-sensitivity">感度 <span id="thin-line-sensitivity-value">0.50</span></label>
+                                    <input type="range" id="thin-line-sensitivity" min="0" max="1" step="0.01" value="0.5">
+                                </div>
+                                <div class="param-group">
+                                    <label for="thin-line-threshold">検出閾値 <span id="thin-line-threshold-value">0.30</span></label>
+                                    <input type="range" id="thin-line-threshold" min="0" max="1" step="0.01" value="0.3">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 自動パラメータ推定セクション -->
+                        <div class="param-section">
+                            <div class="param-section-header">
+                                <input type="checkbox" id="auto-params-enabled">
+                                <label for="auto-params-enabled">自動パラメータ推定</label>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="action-buttons">

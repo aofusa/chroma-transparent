@@ -21,8 +21,9 @@ use crate::config::ColorConfig;
 /// # Arguments
 /// * `image` - 入力画像
 /// * `target_color` - クロマキー対象色
-/// * `tolerance` - 色の許容範囲 (0.0 - 1.0)
+/// * `tolerance` - 色の許容範囲 (0.0 - 1.0)（tolerance_mapがNoneの場合のデフォルト値）
 /// * `color_space` - 使用する色空間
+/// * `tolerance_map` - 適応的許容範囲マップ（Noneの場合は固定toleranceを使用）
 ///
 /// # Returns
 /// グレースケールマスク（白=クロマキー対象、黒=保持）
@@ -31,11 +32,23 @@ pub fn create_chroma_mask(
     target_color: &Rgb,
     tolerance: f32,
     color_space: ColorSpace,
+    tolerance_map: Option<&GrayImage>,
 ) -> GrayImage {
     let (width, height) = image.dimensions();
 
+    // 適応的許容範囲マップのバッファを取得
+    // as_raw()は&Vec<u8>を返すので、&[u8]に変換
+    let tolerance_map_raw: Option<&[u8]> = tolerance_map.map(|tm| tm.as_raw()).map(|v| &**v);
+
     // RGB事前フィルタリングの閾値（改善案B）
-    let rgb_threshold_squared = ((tolerance * 2.0 * 441.67) as u32).pow(2);
+    // 適応的許容範囲を使用する場合でも、最大toleranceで事前フィルタリング
+    let max_tolerance = if let Some(tm_raw) = tolerance_map_raw {
+        // tolerance_mapから最大値を取得
+        tm_raw.iter().map(|&v| v as f32 / 255.0).fold(0.0f32, f32::max).max(tolerance)
+    } else {
+        tolerance
+    };
+    let rgb_threshold_squared = ((max_tolerance * 2.0 * 441.67) as u32).pow(2);
 
     // 入力バッファを取得（改善案D）
     let src = image.as_raw();
@@ -51,7 +64,8 @@ pub fn create_chroma_mask(
                 .into_par_iter()
                 .flat_map(|y| {
                     process_mask_row_hsv(
-                        y, width, src, &lut, target_color, &target_hsv, tolerance, rgb_threshold_squared
+                        y, width, src, &lut, target_color, &target_hsv, tolerance, rgb_threshold_squared,
+                        tolerance_map_raw
                     )
                 })
                 .collect();
@@ -60,7 +74,8 @@ pub fn create_chroma_mask(
             let mask_data: Vec<u8> = (0..height)
                 .flat_map(|y| {
                     process_mask_row_hsv(
-                        y, width, src, &lut, target_color, &target_hsv, tolerance, rgb_threshold_squared
+                        y, width, src, &lut, target_color, &target_hsv, tolerance, rgb_threshold_squared,
+                        tolerance_map_raw
                     )
                 })
                 .collect();
@@ -74,14 +89,16 @@ pub fn create_chroma_mask(
             let mask_data: Vec<u8> = (0..height)
                 .into_par_iter()
                 .flat_map(|y| {
-                    process_mask_row_lab(y, width, src, target_color, &target_lab, tolerance, rgb_threshold_squared)
+                    process_mask_row_lab(y, width, src, target_color, &target_lab, tolerance, rgb_threshold_squared,
+                        tolerance_map_raw)
                 })
                 .collect();
 
             #[cfg(not(feature = "parallel"))]
             let mask_data: Vec<u8> = (0..height)
                 .flat_map(|y| {
-                    process_mask_row_lab(y, width, src, target_color, &target_lab, tolerance, rgb_threshold_squared)
+                    process_mask_row_lab(y, width, src, target_color, &target_lab, tolerance, rgb_threshold_squared,
+                        tolerance_map_raw)
                 })
                 .collect();
 
@@ -94,14 +111,16 @@ pub fn create_chroma_mask(
             let mask_data: Vec<u8> = (0..height)
                 .into_par_iter()
                 .flat_map(|y| {
-                    process_mask_row_lch(y, width, src, target_color, &target_lch, tolerance, rgb_threshold_squared)
+                    process_mask_row_lch(y, width, src, target_color, &target_lch, tolerance, rgb_threshold_squared,
+                        tolerance_map_raw)
                 })
                 .collect();
 
             #[cfg(not(feature = "parallel"))]
             let mask_data: Vec<u8> = (0..height)
                 .flat_map(|y| {
-                    process_mask_row_lch(y, width, src, target_color, &target_lch, tolerance, rgb_threshold_squared)
+                    process_mask_row_lch(y, width, src, target_color, &target_lch, tolerance, rgb_threshold_squared,
+                        tolerance_map_raw)
                 })
                 .collect();
 
@@ -114,14 +133,16 @@ pub fn create_chroma_mask(
             let mask_data: Vec<u8> = (0..height)
                 .into_par_iter()
                 .flat_map(|y| {
-                    process_mask_row_yuv(y, width, src, target_color, &target_yuv, tolerance, rgb_threshold_squared)
+                    process_mask_row_yuv(y, width, src, target_color, &target_yuv, tolerance, rgb_threshold_squared,
+                        tolerance_map_raw)
                 })
                 .collect();
 
             #[cfg(not(feature = "parallel"))]
             let mask_data: Vec<u8> = (0..height)
                 .flat_map(|y| {
-                    process_mask_row_yuv(y, width, src, target_color, &target_yuv, tolerance, rgb_threshold_squared)
+                    process_mask_row_yuv(y, width, src, target_color, &target_yuv, tolerance, rgb_threshold_squared,
+                        tolerance_map_raw)
                 })
                 .collect();
 
@@ -152,7 +173,7 @@ pub fn create_multi_chroma_mask(
 
     let masks: Vec<GrayImage> = color_configs
         .iter()
-        .map(|config| create_chroma_mask(image, &config.color, config.tolerance, color_space))
+        .map(|config| create_chroma_mask(image, &config.color, config.tolerance, color_space, None))
         .collect();
 
     combine_masks(&masks)
@@ -192,11 +213,24 @@ fn process_mask_row_hsv(
     lut: &HsvLut,
     target_color: &Rgb,
     target_hsv: &Hsv,
-    tolerance: f32,
-    rgb_threshold_squared: u32,
+    base_tolerance: f32,
+    _rgb_threshold_squared: u32,
+    tolerance_map_raw: Option<&[u8]>,
 ) -> Vec<u8> {
     let mut row = Vec::with_capacity(width as usize);
     for x in 0..width {
+        // 適応的許容範囲マップからtolerance値を取得
+        let tolerance = if let Some(tm_raw) = tolerance_map_raw {
+            let idx = (y * width + x) as usize;
+            if idx < tm_raw.len() {
+                tm_raw[idx] as f32 / 255.0
+            } else {
+                base_tolerance
+            }
+        } else {
+            base_tolerance
+        };
+
         let idx = ((y * width + x) * 4) as usize;
         let r = src[idx];
         let g = src[idx + 1];
@@ -204,7 +238,10 @@ fn process_mask_row_hsv(
 
         let pixel_rgb = Rgb::new(r, g, b);
 
-        let is_chroma = if rgb_distance_squared(&pixel_rgb, target_color) > rgb_threshold_squared {
+        // 適応的toleranceに基づいてRGB閾値を再計算
+        let pixel_rgb_threshold_squared = ((tolerance * 2.0 * 441.67) as u32).pow(2);
+
+        let is_chroma = if rgb_distance_squared(&pixel_rgb, target_color) > pixel_rgb_threshold_squared {
             false
         } else {
             let pixel_hsv = lut.get(&pixel_rgb);
@@ -223,11 +260,24 @@ fn process_mask_row_lab(
     src: &[u8],
     target_color: &Rgb,
     target_lab: &Lab,
-    tolerance: f32,
-    rgb_threshold_squared: u32,
+    base_tolerance: f32,
+    _rgb_threshold_squared: u32,
+    tolerance_map_raw: Option<&[u8]>,
 ) -> Vec<u8> {
     let mut row = Vec::with_capacity(width as usize);
     for x in 0..width {
+        // 適応的許容範囲マップからtolerance値を取得
+        let tolerance = if let Some(tm_raw) = tolerance_map_raw {
+            let idx = (y * width + x) as usize;
+            if idx < tm_raw.len() {
+                tm_raw[idx] as f32 / 255.0
+            } else {
+                base_tolerance
+            }
+        } else {
+            base_tolerance
+        };
+
         let idx = ((y * width + x) * 4) as usize;
         let r = src[idx];
         let g = src[idx + 1];
@@ -235,7 +285,10 @@ fn process_mask_row_lab(
 
         let pixel_rgb = Rgb::new(r, g, b);
 
-        let is_chroma = if rgb_distance_squared(&pixel_rgb, target_color) > rgb_threshold_squared {
+        // 適応的toleranceに基づいてRGB閾値を再計算
+        let pixel_rgb_threshold_squared = ((tolerance * 2.0 * 441.67) as u32).pow(2);
+
+        let is_chroma = if rgb_distance_squared(&pixel_rgb, target_color) > pixel_rgb_threshold_squared {
             false
         } else {
             let pixel_lab = rgb_to_lab(&pixel_rgb);
@@ -254,11 +307,24 @@ fn process_mask_row_lch(
     src: &[u8],
     target_color: &Rgb,
     target_lch: &Lch,
-    tolerance: f32,
-    rgb_threshold_squared: u32,
+    base_tolerance: f32,
+    _rgb_threshold_squared: u32,
+    tolerance_map_raw: Option<&[u8]>,
 ) -> Vec<u8> {
     let mut row = Vec::with_capacity(width as usize);
     for x in 0..width {
+        // 適応的許容範囲マップからtolerance値を取得
+        let tolerance = if let Some(tm_raw) = tolerance_map_raw {
+            let idx = (y * width + x) as usize;
+            if idx < tm_raw.len() {
+                tm_raw[idx] as f32 / 255.0
+            } else {
+                base_tolerance
+            }
+        } else {
+            base_tolerance
+        };
+
         let idx = ((y * width + x) * 4) as usize;
         let r = src[idx];
         let g = src[idx + 1];
@@ -266,7 +332,10 @@ fn process_mask_row_lch(
 
         let pixel_rgb = Rgb::new(r, g, b);
 
-        let is_chroma = if rgb_distance_squared(&pixel_rgb, target_color) > rgb_threshold_squared {
+        // 適応的toleranceに基づいてRGB閾値を再計算
+        let pixel_rgb_threshold_squared = ((tolerance * 2.0 * 441.67) as u32).pow(2);
+
+        let is_chroma = if rgb_distance_squared(&pixel_rgb, target_color) > pixel_rgb_threshold_squared {
             false
         } else {
             let pixel_lch = rgb_to_lch(&pixel_rgb);
@@ -285,11 +354,24 @@ fn process_mask_row_yuv(
     src: &[u8],
     target_color: &Rgb,
     target_yuv: &Yuv,
-    tolerance: f32,
-    rgb_threshold_squared: u32,
+    base_tolerance: f32,
+    _rgb_threshold_squared: u32,
+    tolerance_map_raw: Option<&[u8]>,
 ) -> Vec<u8> {
     let mut row = Vec::with_capacity(width as usize);
     for x in 0..width {
+        // 適応的許容範囲マップからtolerance値を取得
+        let tolerance = if let Some(tm_raw) = tolerance_map_raw {
+            let idx = (y * width + x) as usize;
+            if idx < tm_raw.len() {
+                tm_raw[idx] as f32 / 255.0
+            } else {
+                base_tolerance
+            }
+        } else {
+            base_tolerance
+        };
+
         let idx = ((y * width + x) * 4) as usize;
         let r = src[idx];
         let g = src[idx + 1];
@@ -297,7 +379,10 @@ fn process_mask_row_yuv(
 
         let pixel_rgb = Rgb::new(r, g, b);
 
-        let is_chroma = if rgb_distance_squared(&pixel_rgb, target_color) > rgb_threshold_squared {
+        // 適応的toleranceに基づいてRGB閾値を再計算
+        let pixel_rgb_threshold_squared = ((tolerance * 2.0 * 441.67) as u32).pow(2);
+
+        let is_chroma = if rgb_distance_squared(&pixel_rgb, target_color) > pixel_rgb_threshold_squared {
             false
         } else {
             let pixel_yuv = rgb_to_yuv(&pixel_rgb);
@@ -323,7 +408,7 @@ mod tests {
         image.put_pixel(2, 0, Rgba([0, 0, 255, 255])); // 青
 
         let target = Rgb::new(0, 255, 0);
-        let mask = create_chroma_mask(&image, &target, 0.3, crate::color::ColorSpace::Hsv);
+        let mask = create_chroma_mask(&image, &target, 0.3, crate::color::ColorSpace::Hsv, None);
 
         // 緑のピクセルだけがマスクされる
         assert_eq!(mask.get_pixel(0, 0).0[0], 255); // 緑はクロマキー対象
@@ -340,11 +425,11 @@ mod tests {
         let target = Rgb::new(0, 255, 0);
 
         // 低い許容範囲
-        let mask_low = create_chroma_mask(&image, &target, 0.1, ColorSpace::Hsv);
+        let mask_low = create_chroma_mask(&image, &target, 0.1, ColorSpace::Hsv, None);
         assert_eq!(mask_low.get_pixel(0, 0).0[0], 255); // 完全な緑は検出
 
         // 高い許容範囲
-        let mask_high = create_chroma_mask(&image, &target, 0.5, ColorSpace::Hsv);
+        let mask_high = create_chroma_mask(&image, &target, 0.5, ColorSpace::Hsv, None);
         assert_eq!(mask_high.get_pixel(0, 0).0[0], 255); // 完全な緑
         assert_eq!(mask_high.get_pixel(1, 0).0[0], 255); // 暗めの緑も検出
     }
@@ -364,7 +449,7 @@ mod tests {
         }
 
         let target = Rgb::new(0, 255, 0);
-        let mask = create_chroma_mask(&image, &target, 0.3, crate::color::ColorSpace::Hsv);
+        let mask = create_chroma_mask(&image, &target, 0.3, crate::color::ColorSpace::Hsv, None);
 
         // 左半分は白、右半分は黒
         assert_eq!(mask.get_pixel(0, 0).0[0], 255);

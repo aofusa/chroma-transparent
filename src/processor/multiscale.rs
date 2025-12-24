@@ -29,7 +29,7 @@ pub fn create_multiscale_mask(
     color_space: ColorSpace,
 ) -> GrayImage {
     if levels == 0 {
-        return create_chroma_mask(image, target_color, tolerance, color_space);
+        return create_chroma_mask(image, target_color, tolerance, color_space, None);
     }
 
     let (width, height) = image.dimensions();
@@ -54,7 +54,7 @@ pub fn create_multiscale_mask(
         );
 
         // マスクを生成
-        let mask = create_chroma_mask(&scaled_image, target_color, tolerance, color_space);
+        let mask = create_chroma_mask(&scaled_image, target_color, tolerance, color_space, None);
 
         // 元のサイズにアップスケール
         let upscaled_mask = image::imageops::resize(

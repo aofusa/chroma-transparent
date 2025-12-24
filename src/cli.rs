@@ -494,6 +494,19 @@ mod tests {
             sharpen_amount: 0.5,
             sharpen_radius: 1.0,
             sharpen_threshold: 0.0,
+            adaptive_tolerance: false,
+            adaptive_tolerance_grid_w: 8,
+            adaptive_tolerance_grid_h: 8,
+            adaptive_tolerance_sensitivity: 1.0,
+            edge_detection_method: "sobel".to_string(),
+            canny_low_threshold: 0.1,
+            canny_high_threshold: 0.3,
+            canny_gaussian_sigma: 1.0,
+            despill_method: "basic".to_string(),
+            thin_line_detection: false,
+            thin_line_sensitivity: 0.5,
+            thin_line_threshold: 0.3,
+            auto_params: false,
         }
     }
 

@@ -168,7 +168,7 @@ mod tests {
     #[test]
     fn test_optimize_edge_zero_smoothness() {
         let alpha = GrayImage::from_fn(10, 10, |_, _| image::Luma([128]));
-        let result = optimize_edge(&alpha, 0.1, 0.0);
+        let result = optimize_edge(&alpha, 0.1, 0.0, EdgeDetectionMethod::Sobel);
         // 滑らかさ0の場合は変化なし
         assert_eq!(result.get_pixel(5, 5).0[0], 128);
     }

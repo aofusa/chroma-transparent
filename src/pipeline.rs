@@ -47,8 +47,8 @@ impl ChromaPipeline {
         }
 
         // 1. クロマキーマスク生成（改善A, B, D, F適用）
-        // 適応的許容範囲を使用する場合（将来の実装用）
-        let _tolerance_map = if config.adaptive_tolerance_enabled {
+        // 適応的許容範囲マップを生成（有効時）
+        let tolerance_map = if config.adaptive_tolerance_enabled {
             Some(create_adaptive_tolerance_map(
                 image,
                 &config.chroma_color,
@@ -60,24 +60,29 @@ impl ChromaPipeline {
             None
         };
         
-        // 注意: 適応的許容範囲を使用する場合、mask.rsを拡張する必要がある
-        // 現在は固定toleranceを使用
+        // マスク生成（適応的許容範囲マップを使用）
         let mask = if config.multiscale_enabled {
-            // マルチスケール処理
+            // マルチスケール処理（適応的許容範囲は未対応、将来的に拡張可能）
             create_multiscale_mask(
                 image,
-                &self.config.chroma_color,
-                self.config.tolerance,
-                self.config.multiscale_levels,
-                self.config.multiscale_scale_factor,
-                self.config.color_space,
+                &config.chroma_color,
+                config.tolerance,
+                config.multiscale_levels,
+                config.multiscale_scale_factor,
+                config.color_space,
             )
         } else if let Some(ref multi_colors) = config.multi_colors {
-            // 多色検出
+            // 多色検出（適応的許容範囲は未対応、将来的に拡張可能）
             create_multi_chroma_mask(image, multi_colors, config.color_space)
         } else {
-            // 単色検出（既存の処理）
-            create_chroma_mask(image, &config.chroma_color, config.tolerance, config.color_space)
+            // 単色検出（適応的許容範囲対応）
+            create_chroma_mask(
+                image,
+                &config.chroma_color,
+                config.tolerance,
+                config.color_space,
+                tolerance_map.as_ref(),
+            )
         };
         debug!("Mask generation completed");
 

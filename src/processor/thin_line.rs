@@ -31,9 +31,8 @@ pub fn detect_thin_lines(
         return mask.clone();
     }
 
-    let (width, height) = image.dimensions();
+    let (width, _height) = image.dimensions();
     let w = width as usize;
-    let h = height as usize;
 
     // 細線を検出
     let thin_edges = detect_thin_edges(image, target_color, threshold);
@@ -69,6 +68,8 @@ pub fn detect_thin_lines(
 
     #[cfg(not(feature = "parallel"))]
     {
+        let (_, height) = image.dimensions();
+        let h = height as usize;
         for y in 0..h {
             for x in 0..w {
                 let idx = y * w + x;

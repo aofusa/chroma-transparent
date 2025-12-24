@@ -110,7 +110,7 @@ fn detect_thin_edges(image: &RgbaImage, target_color: &Rgb, threshold: f32) -> G
                     return;
                 }
                 for x in 1..(w - 1) {
-                    let idx = y * w + x;
+                    let _idx = y * w + x;
                     let edge_val = detect_thin_edge_pixel(
                         src,
                         x,
@@ -155,7 +155,7 @@ fn detect_thin_edge_pixel(
     y: usize,
     w: usize,
     h: usize,
-    target_color: &Rgb,
+    _target_color: &Rgb,
     target_hsv: &Hsv,
     threshold: u8,
 ) -> u8 {

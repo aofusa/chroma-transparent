@@ -201,7 +201,7 @@ fn despill_row_advanced(
     w: usize,
     mask_raw: &[u8],
     strength: f32,
-    chroma_color: &Rgb,
+    _chroma_color: &Rgb,
     target_yuv: &Yuv,
 ) {
     for x in 0..w {

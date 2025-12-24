@@ -246,6 +246,59 @@ pub struct Args {
     /// エッジシャープニング: シャープニング閾値
     #[arg(long, default_value = "0.0", value_name = "FLOAT")]
     pub sharpen_threshold: f32,
+
+    // === 新規実装機能 ===
+    /// 適応的許容範囲を有効化
+    #[arg(long)]
+    pub adaptive_tolerance: bool,
+
+    /// 適応的許容範囲: グリッドサイズ（幅）
+    #[arg(long, default_value = "8", value_name = "INT")]
+    pub adaptive_tolerance_grid_w: u32,
+
+    /// 適応的許容範囲: グリッドサイズ（高さ）
+    #[arg(long, default_value = "8", value_name = "INT")]
+    pub adaptive_tolerance_grid_h: u32,
+
+    /// 適応的許容範囲: 感度調整
+    #[arg(long, default_value = "1.0", value_name = "FLOAT")]
+    pub adaptive_tolerance_sensitivity: f32,
+
+    /// エッジ検出方法 (sobel, canny)
+    #[arg(long, default_value = "sobel", value_name = "METHOD")]
+    pub edge_detection_method: String,
+
+    /// Cannyエッジ検出: 低閾値
+    #[arg(long, default_value = "0.1", value_name = "FLOAT")]
+    pub canny_low_threshold: f32,
+
+    /// Cannyエッジ検出: 高閾値
+    #[arg(long, default_value = "0.3", value_name = "FLOAT")]
+    pub canny_high_threshold: f32,
+
+    /// Cannyエッジ検出: ガウシアンシグマ
+    #[arg(long, default_value = "1.0", value_name = "FLOAT")]
+    pub canny_gaussian_sigma: f32,
+
+    /// デスピル方法 (basic, advanced)
+    #[arg(long, default_value = "basic", value_name = "METHOD")]
+    pub despill_method: String,
+
+    /// 細線検出を有効化
+    #[arg(long)]
+    pub thin_line_detection: bool,
+
+    /// 細線検出: 感度
+    #[arg(long, default_value = "0.5", value_name = "FLOAT")]
+    pub thin_line_sensitivity: f32,
+
+    /// 細線検出: 検出閾値
+    #[arg(long, default_value = "0.3", value_name = "FLOAT")]
+    pub thin_line_threshold: f32,
+
+    /// 自動パラメータ推定を有効化
+    #[arg(long)]
+    pub auto_params: bool,
 }
 
 impl Args {

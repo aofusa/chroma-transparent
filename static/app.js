@@ -688,6 +688,27 @@ class ChromaApp {
         this.sharpenRadius = document.getElementById('sharpen-radius');
         this.sharpenThreshold = document.getElementById('sharpen-threshold');
         
+        // 新規実装機能
+        this.adaptiveToleranceEnabled = document.getElementById('adaptive-tolerance-enabled');
+        this.adaptiveToleranceParams = document.getElementById('adaptive-tolerance-params');
+        this.adaptiveToleranceGridW = document.getElementById('adaptive-tolerance-grid-w');
+        this.adaptiveToleranceGridH = document.getElementById('adaptive-tolerance-grid-h');
+        this.adaptiveToleranceSensitivity = document.getElementById('adaptive-tolerance-sensitivity');
+        
+        this.edgeDetectionMethod = document.getElementById('edge-detection-method');
+        this.cannyLowThreshold = document.getElementById('canny-low-threshold');
+        this.cannyHighThreshold = document.getElementById('canny-high-threshold');
+        this.cannyGaussianSigma = document.getElementById('canny-gaussian-sigma');
+        
+        this.despillMethod = document.getElementById('despill-method');
+        
+        this.thinLineDetectionEnabled = document.getElementById('thin-line-detection-enabled');
+        this.thinLineDetectionParams = document.getElementById('thin-line-detection-params');
+        this.thinLineSensitivity = document.getElementById('thin-line-sensitivity');
+        this.thinLineThreshold = document.getElementById('thin-line-threshold');
+        
+        this.autoParamsEnabled = document.getElementById('auto-params-enabled');
+        
         // Buttons
         this.resetBtn = document.getElementById('reset-btn');
         this.processBtn = document.getElementById('process-btn');
@@ -895,6 +916,51 @@ class ChromaApp {
                 this.schedulePreview();
             });
         });
+        
+        // 適応的許容範囲
+        this.adaptiveToleranceEnabled.addEventListener('change', (e) => {
+            this.adaptiveToleranceParams.hidden = !e.target.checked;
+            this.schedulePreview();
+        });
+        [this.adaptiveToleranceGridW, this.adaptiveToleranceGridH, this.adaptiveToleranceSensitivity].forEach(slider => {
+            slider.addEventListener('input', () => {
+                this.updateSliderValue(slider);
+                this.schedulePreview();
+            });
+        });
+        
+        // エッジ検出方法
+        this.edgeDetectionMethod.addEventListener('change', () => {
+            const isCanny = this.edgeDetectionMethod.value === 'canny';
+            document.querySelectorAll('#canny-params').forEach(el => {
+                el.hidden = !isCanny;
+            });
+            this.schedulePreview();
+        });
+        [this.cannyLowThreshold, this.cannyHighThreshold, this.cannyGaussianSigma].forEach(slider => {
+            slider.addEventListener('input', () => {
+                this.updateSliderValue(slider);
+                this.schedulePreview();
+            });
+        });
+        
+        // デスピル方法
+        this.despillMethod.addEventListener('change', () => this.schedulePreview());
+        
+        // 細線検出
+        this.thinLineDetectionEnabled.addEventListener('change', (e) => {
+            this.thinLineDetectionParams.hidden = !e.target.checked;
+            this.schedulePreview();
+        });
+        [this.thinLineSensitivity, this.thinLineThreshold].forEach(slider => {
+            slider.addEventListener('input', () => {
+                this.updateSliderValue(slider);
+                this.schedulePreview();
+            });
+        });
+        
+        // 自動パラメータ推定
+        this.autoParamsEnabled.addEventListener('change', () => this.schedulePreview());
         
         // Action buttons
         this.resetBtn.addEventListener('click', () => this.resetParams());
@@ -1375,6 +1441,52 @@ class ChromaApp {
                 amount: parseFloat(this.sharpenAmount.value),
                 radius: parseFloat(this.sharpenRadius.value),
                 threshold: parseFloat(this.sharpenThreshold.value)
+            };
+        }
+        
+        // 適応的許容範囲
+        if (this.adaptiveToleranceEnabled && this.adaptiveToleranceEnabled.checked) {
+            params.adaptiveTolerance = {
+                enabled: true,
+                gridW: parseInt(this.adaptiveToleranceGridW.value, 10),
+                gridH: parseInt(this.adaptiveToleranceGridH.value, 10),
+                sensitivity: parseFloat(this.adaptiveToleranceSensitivity.value)
+            };
+        }
+        
+        // エッジ検出方法
+        if (this.edgeOptimizationEnabled && this.edgeOptimizationEnabled.checked) {
+            params.edgeOptimization = {
+                enabled: true,
+                method: this.edgeDetectionMethod ? this.edgeDetectionMethod.value : 'sobel',
+                threshold: parseFloat(this.edgeThreshold.value),
+                smoothness: parseFloat(this.edgeSmoothness.value)
+            };
+            if (this.edgeDetectionMethod && this.edgeDetectionMethod.value === 'canny') {
+                params.edgeOptimization.cannyLowThreshold = parseFloat(this.cannyLowThreshold.value);
+                params.edgeOptimization.cannyHighThreshold = parseFloat(this.cannyHighThreshold.value);
+                params.edgeOptimization.cannyGaussianSigma = parseFloat(this.cannyGaussianSigma.value);
+            }
+        }
+        
+        // デスピル方法
+        if (this.despillMethod) {
+            params.despillMethod = this.despillMethod.value;
+        }
+        
+        // 細線検出
+        if (this.thinLineDetectionEnabled && this.thinLineDetectionEnabled.checked) {
+            params.thinLineDetection = {
+                enabled: true,
+                sensitivity: parseFloat(this.thinLineSensitivity.value),
+                threshold: parseFloat(this.thinLineThreshold.value)
+            };
+        }
+        
+        // 自動パラメータ推定
+        if (this.autoParamsEnabled && this.autoParamsEnabled.checked) {
+            params.autoParams = {
+                enabled: true
             };
         }
         

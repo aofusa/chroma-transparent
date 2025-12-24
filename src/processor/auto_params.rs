@@ -45,7 +45,7 @@ impl Default for EstimatedParameters {
 /// 推定されたパラメータ
 pub fn estimate_parameters(image: &RgbaImage, chroma_color: &Rgb) -> EstimatedParameters {
     let (width, height) = image.dimensions();
-    let total_pixels = (width * height) as usize;
+    let _total_pixels = (width * height) as usize;
 
     // 1. 色分布分析
     let color_stats = analyze_color_distribution(image, chroma_color);
@@ -119,7 +119,6 @@ pub fn estimate_parameters(image: &RgbaImage, chroma_color: &Rgb) -> EstimatedPa
 
 /// 色分布統計
 struct ColorStats {
-    mean: f32,
     std_dev: f32,
 }
 
@@ -146,7 +145,6 @@ fn analyze_color_distribution(image: &RgbaImage, target_color: &Rgb) -> ColorSta
 
     if distances.is_empty() {
         return ColorStats {
-            mean: 0.0,
             std_dev: 0.0,
         };
     }
@@ -162,7 +160,7 @@ fn analyze_color_distribution(image: &RgbaImage, target_color: &Rgb) -> ColorSta
         / distances.len() as f32;
     let std_dev = variance.sqrt();
 
-    ColorStats { mean, std_dev }
+    ColorStats { std_dev }
 }
 
 /// コントラストを計算

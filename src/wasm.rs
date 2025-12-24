@@ -46,6 +46,25 @@ pub struct WasmProcessParams {
     sharpen_amount: f32,
     sharpen_radius: f32,
     sharpen_threshold: f32,
+    
+    // 新規実装機能
+    adaptive_tolerance_enabled: bool,
+    adaptive_tolerance_grid_w: u32,
+    adaptive_tolerance_grid_h: u32,
+    adaptive_tolerance_sensitivity: f32,
+    
+    edge_detection_method: String,
+    canny_low_threshold: f32,
+    canny_high_threshold: f32,
+    canny_gaussian_sigma: f32,
+    
+    despill_method: String,
+    
+    thin_line_detection_enabled: bool,
+    thin_line_sensitivity: f32,
+    thin_line_threshold: f32,
+    
+    auto_params_enabled: bool,
 }
 
 #[wasm_bindgen]
@@ -80,6 +99,24 @@ impl WasmProcessParams {
             sharpen_amount: 0.5,
             sharpen_radius: 1.0,
             sharpen_threshold: 0.0,
+            
+            adaptive_tolerance_enabled: false,
+            adaptive_tolerance_grid_w: 8,
+            adaptive_tolerance_grid_h: 8,
+            adaptive_tolerance_sensitivity: 1.0,
+            
+            edge_detection_method: "sobel".to_string(),
+            canny_low_threshold: 0.1,
+            canny_high_threshold: 0.3,
+            canny_gaussian_sigma: 1.0,
+            
+            despill_method: "basic".to_string(),
+            
+            thin_line_detection_enabled: false,
+            thin_line_sensitivity: 0.5,
+            thin_line_threshold: 0.3,
+            
+            auto_params_enabled: false,
         }
     }
 
@@ -184,6 +221,24 @@ impl WasmProcessParams {
         self.sharpen_amount = 0.5;
         self.sharpen_radius = 1.0;
         self.sharpen_threshold = 0.0;
+        
+        self.adaptive_tolerance_enabled = false;
+        self.adaptive_tolerance_grid_w = 8;
+        self.adaptive_tolerance_grid_h = 8;
+        self.adaptive_tolerance_sensitivity = 1.0;
+        
+        self.edge_detection_method = "sobel".to_string();
+        self.canny_low_threshold = 0.1;
+        self.canny_high_threshold = 0.3;
+        self.canny_gaussian_sigma = 1.0;
+        
+        self.despill_method = "basic".to_string();
+        
+        self.thin_line_detection_enabled = false;
+        self.thin_line_sensitivity = 0.5;
+        self.thin_line_threshold = 0.3;
+        
+        self.auto_params_enabled = false;
     }
     
     // 新規フィールドのgetter/setter
@@ -527,6 +582,31 @@ fn build_config(params: &WasmProcessParams) -> Result<ProcessConfig, JsValue> {
     config.sharpen_amount = params.sharpen_amount;
     config.sharpen_radius = params.sharpen_radius;
     config.sharpen_threshold = params.sharpen_threshold;
+    
+    // 新規実装機能
+    config.adaptive_tolerance_enabled = params.adaptive_tolerance_enabled;
+    config.adaptive_tolerance_grid_w = params.adaptive_tolerance_grid_w;
+    config.adaptive_tolerance_grid_h = params.adaptive_tolerance_grid_h;
+    config.adaptive_tolerance_sensitivity = params.adaptive_tolerance_sensitivity;
+    
+    config.edge_detection_method = match params.edge_detection_method.as_str() {
+        "canny" => crate::processor::EdgeDetectionMethod::Canny,
+        _ => crate::processor::EdgeDetectionMethod::Sobel,
+    };
+    config.canny_low_threshold = params.canny_low_threshold;
+    config.canny_high_threshold = params.canny_high_threshold;
+    config.canny_gaussian_sigma = params.canny_gaussian_sigma;
+    
+    config.despill_method = match params.despill_method.as_str() {
+        "advanced" => crate::processor::DespillMethod::Advanced,
+        _ => crate::processor::DespillMethod::Basic,
+    };
+    
+    config.thin_line_detection_enabled = params.thin_line_detection_enabled;
+    config.thin_line_sensitivity = params.thin_line_sensitivity;
+    config.thin_line_threshold = params.thin_line_threshold;
+    
+    config.auto_params_enabled = params.auto_params_enabled;
     
     Ok(config)
 }

@@ -59,6 +59,25 @@ pub struct ProcessParams {
     pub sharpen_amount: Option<f32>,
     pub sharpen_radius: Option<f32>,
     pub sharpen_threshold: Option<f32>,
+    
+    // 新規実装機能
+    pub adaptive_tolerance: Option<bool>,
+    pub adaptive_tolerance_grid_w: Option<u32>,
+    pub adaptive_tolerance_grid_h: Option<u32>,
+    pub adaptive_tolerance_sensitivity: Option<f32>,
+    
+    pub edge_detection_method: Option<String>,
+    pub canny_low_threshold: Option<f32>,
+    pub canny_high_threshold: Option<f32>,
+    pub canny_gaussian_sigma: Option<f32>,
+    
+    pub despill_method: Option<String>,
+    
+    pub thin_line_detection: Option<bool>,
+    pub thin_line_sensitivity: Option<f32>,
+    pub thin_line_threshold: Option<f32>,
+    
+    pub auto_params: Option<bool>,
 }
 
 /// 処理レスポンス
@@ -457,6 +476,24 @@ async fn parse_multipart_form(mut form: FormData) -> Result<ProcessParams, Rejec
         sharpen_amount: None,
         sharpen_radius: None,
         sharpen_threshold: None,
+        
+        adaptive_tolerance: None,
+        adaptive_tolerance_grid_w: None,
+        adaptive_tolerance_grid_h: None,
+        adaptive_tolerance_sensitivity: None,
+        
+        edge_detection_method: None,
+        canny_low_threshold: None,
+        canny_high_threshold: None,
+        canny_gaussian_sigma: None,
+        
+        despill_method: None,
+        
+        thin_line_detection: None,
+        thin_line_sensitivity: None,
+        thin_line_threshold: None,
+        
+        auto_params: None,
         ..Default::default()
     };
 
@@ -538,6 +575,190 @@ async fn parse_multipart_form(mut form: FormData) -> Result<ProcessParams, Rejec
                         params.preview_size = Some(v);
                     }
                 }
+            }
+            "color_space" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    params.color_space = Some(s.trim().to_string());
+                }
+            }
+            "multi_color" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    params.multi_colors.push(s.trim().to_string());
+                }
+            }
+            "bilateral" => {
+                params.bilateral = Some(true);
+            }
+            "bilateral_spatial_sigma" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    if let Ok(v) = s.trim().parse() {
+                        params.bilateral_spatial_sigma = Some(v);
+                    }
+                }
+            }
+            "bilateral_color_sigma" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    if let Ok(v) = s.trim().parse() {
+                        params.bilateral_color_sigma = Some(v);
+                    }
+                }
+            }
+            "bilateral_radius" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    if let Ok(v) = s.trim().parse() {
+                        params.bilateral_radius = Some(v);
+                    }
+                }
+            }
+            "multiscale" => {
+                params.multiscale = Some(true);
+            }
+            "multiscale_levels" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    if let Ok(v) = s.trim().parse() {
+                        params.multiscale_levels = Some(v);
+                    }
+                }
+            }
+            "multiscale_scale_factor" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    if let Ok(v) = s.trim().parse() {
+                        params.multiscale_scale_factor = Some(v);
+                    }
+                }
+            }
+            "edge_optimization" => {
+                params.edge_optimization = Some(true);
+            }
+            "edge_threshold" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    if let Ok(v) = s.trim().parse() {
+                        params.edge_threshold = Some(v);
+                    }
+                }
+            }
+            "edge_smoothness" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    if let Ok(v) = s.trim().parse() {
+                        params.edge_smoothness = Some(v);
+                    }
+                }
+            }
+            "shadow_removal" => {
+                params.shadow_removal = Some(true);
+            }
+            "shadow_threshold" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    if let Ok(v) = s.trim().parse() {
+                        params.shadow_threshold = Some(v);
+                    }
+                }
+            }
+            "shadow_removal_strength" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    if let Ok(v) = s.trim().parse() {
+                        params.shadow_removal_strength = Some(v);
+                    }
+                }
+            }
+            "sharpen" => {
+                params.sharpen = Some(true);
+            }
+            "sharpen_amount" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    if let Ok(v) = s.trim().parse() {
+                        params.sharpen_amount = Some(v);
+                    }
+                }
+            }
+            "sharpen_radius" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    if let Ok(v) = s.trim().parse() {
+                        params.sharpen_radius = Some(v);
+                    }
+                }
+            }
+            "sharpen_threshold" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    if let Ok(v) = s.trim().parse() {
+                        params.sharpen_threshold = Some(v);
+                    }
+                }
+            }
+            "adaptive_tolerance" => {
+                params.adaptive_tolerance = Some(true);
+            }
+            "adaptive_tolerance_grid_w" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    if let Ok(v) = s.trim().parse() {
+                        params.adaptive_tolerance_grid_w = Some(v);
+                    }
+                }
+            }
+            "adaptive_tolerance_grid_h" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    if let Ok(v) = s.trim().parse() {
+                        params.adaptive_tolerance_grid_h = Some(v);
+                    }
+                }
+            }
+            "adaptive_tolerance_sensitivity" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    if let Ok(v) = s.trim().parse() {
+                        params.adaptive_tolerance_sensitivity = Some(v);
+                    }
+                }
+            }
+            "edge_detection_method" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    params.edge_detection_method = Some(s.trim().to_string());
+                }
+            }
+            "canny_low_threshold" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    if let Ok(v) = s.trim().parse() {
+                        params.canny_low_threshold = Some(v);
+                    }
+                }
+            }
+            "canny_high_threshold" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    if let Ok(v) = s.trim().parse() {
+                        params.canny_high_threshold = Some(v);
+                    }
+                }
+            }
+            "canny_gaussian_sigma" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    if let Ok(v) = s.trim().parse() {
+                        params.canny_gaussian_sigma = Some(v);
+                    }
+                }
+            }
+            "despill_method" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    params.despill_method = Some(s.trim().to_string());
+                }
+            }
+            "thin_line_detection" => {
+                params.thin_line_detection = Some(true);
+            }
+            "thin_line_sensitivity" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    if let Ok(v) = s.trim().parse() {
+                        params.thin_line_sensitivity = Some(v);
+                    }
+                }
+            }
+            "thin_line_threshold" => {
+                if let Ok(s) = String::from_utf8(data) {
+                    if let Ok(v) = s.trim().parse() {
+                        params.thin_line_threshold = Some(v);
+                    }
+                }
+            }
+            "auto_params" => {
+                params.auto_params = Some(true);
             }
             _ => {}
         }
@@ -621,6 +842,30 @@ fn build_process_config(params: &ProcessParams, _config: &ServerConfig) -> Resul
         sharpen_amount: params.sharpen_amount.unwrap_or(0.5),
         sharpen_radius: params.sharpen_radius.unwrap_or(1.0),
         sharpen_threshold: params.sharpen_threshold.unwrap_or(0.0),
+        
+        adaptive_tolerance_enabled: params.adaptive_tolerance.unwrap_or(false),
+        adaptive_tolerance_grid_w: params.adaptive_tolerance_grid_w.unwrap_or(8),
+        adaptive_tolerance_grid_h: params.adaptive_tolerance_grid_h.unwrap_or(8),
+        adaptive_tolerance_sensitivity: params.adaptive_tolerance_sensitivity.unwrap_or(1.0),
+        
+        edge_detection_method: match params.edge_detection_method.as_deref() {
+            Some("canny") => crate::processor::EdgeDetectionMethod::Canny,
+            _ => crate::processor::EdgeDetectionMethod::Sobel,
+        },
+        canny_low_threshold: params.canny_low_threshold.unwrap_or(0.1),
+        canny_high_threshold: params.canny_high_threshold.unwrap_or(0.3),
+        canny_gaussian_sigma: params.canny_gaussian_sigma.unwrap_or(1.0),
+        
+        despill_method: match params.despill_method.as_deref() {
+            Some("advanced") => crate::processor::DespillMethod::Advanced,
+            _ => crate::processor::DespillMethod::Basic,
+        },
+        
+        thin_line_detection_enabled: params.thin_line_detection.unwrap_or(false),
+        thin_line_sensitivity: params.thin_line_sensitivity.unwrap_or(0.5),
+        thin_line_threshold: params.thin_line_threshold.unwrap_or(0.3),
+        
+        auto_params_enabled: params.auto_params.unwrap_or(false),
     })
 }
 

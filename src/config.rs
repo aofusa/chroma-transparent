@@ -296,6 +296,38 @@ impl ProcessConfig {
             sharpen_amount: args.sharpen_amount,
             sharpen_radius: args.sharpen_radius,
             sharpen_threshold: args.sharpen_threshold,
+            
+            adaptive_tolerance_enabled: args.adaptive_tolerance,
+            adaptive_tolerance_grid_w: args.adaptive_tolerance_grid_w,
+            adaptive_tolerance_grid_h: args.adaptive_tolerance_grid_h,
+            adaptive_tolerance_sensitivity: args.adaptive_tolerance_sensitivity,
+            
+            edge_detection_method: match args.edge_detection_method.to_lowercase().as_str() {
+                "sobel" => EdgeDetectionMethod::Sobel,
+                "canny" => EdgeDetectionMethod::Canny,
+                _ => return Err(ChromaError::InvalidParameter {
+                    name: "edge-detection-method".to_string(),
+                    value: args.edge_detection_method.clone(),
+                }),
+            },
+            canny_low_threshold: args.canny_low_threshold,
+            canny_high_threshold: args.canny_high_threshold,
+            canny_gaussian_sigma: args.canny_gaussian_sigma,
+            
+            despill_method: match args.despill_method.to_lowercase().as_str() {
+                "basic" => DespillMethod::Basic,
+                "advanced" => DespillMethod::Advanced,
+                _ => return Err(ChromaError::InvalidParameter {
+                    name: "despill-method".to_string(),
+                    value: args.despill_method.clone(),
+                }),
+            },
+            
+            thin_line_detection_enabled: args.thin_line_detection,
+            thin_line_sensitivity: args.thin_line_sensitivity,
+            thin_line_threshold: args.thin_line_threshold,
+            
+            auto_params_enabled: args.auto_params,
         })
     }
 }

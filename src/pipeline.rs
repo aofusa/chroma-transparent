@@ -18,7 +18,7 @@ use crate::processor::{
     apply_estimated_parameters, bilateral_filter_alpha, create_adaptive_tolerance_map,
     create_alpha_from_mask, create_chroma_mask, create_multi_chroma_mask,
     create_multiscale_mask, despill, detect_thin_lines, dilate, erode, estimate_parameters,
-    feather_alpha, optimize_edge, remove_shadows, sharpen, DespillMethod, EdgeDetectionMethod,
+    feather_alpha, optimize_edge, remove_shadows, sharpen,
 };
 
 /// クロマキー処理パイプライン
@@ -47,8 +47,8 @@ impl ChromaPipeline {
         }
 
         // 1. クロマキーマスク生成（改善A, B, D, F適用）
-        // 適応的許容範囲を使用する場合
-        let tolerance_map = if config.adaptive_tolerance_enabled {
+        // 適応的許容範囲を使用する場合（将来の実装用）
+        let _tolerance_map = if config.adaptive_tolerance_enabled {
             Some(create_adaptive_tolerance_map(
                 image,
                 &config.chroma_color,

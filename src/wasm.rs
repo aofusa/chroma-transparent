@@ -421,6 +421,47 @@ impl WasmProcessParams {
     pub fn get_sharpen_threshold(&self) -> f32 {
         self.sharpen_threshold
     }
+    
+    // 適応的許容範囲のgetter/setter
+    #[wasm_bindgen(js_name = setAdaptiveToleranceEnabled)]
+    pub fn set_adaptive_tolerance_enabled(&mut self, v: bool) {
+        self.adaptive_tolerance_enabled = v;
+    }
+    
+    #[wasm_bindgen(js_name = getAdaptiveToleranceEnabled)]
+    pub fn get_adaptive_tolerance_enabled(&self) -> bool {
+        self.adaptive_tolerance_enabled
+    }
+    
+    #[wasm_bindgen(js_name = setAdaptiveToleranceGridW)]
+    pub fn set_adaptive_tolerance_grid_w(&mut self, v: u32) {
+        self.adaptive_tolerance_grid_w = v.clamp(4, 32);
+    }
+    
+    #[wasm_bindgen(js_name = getAdaptiveToleranceGridW)]
+    pub fn get_adaptive_tolerance_grid_w(&self) -> u32 {
+        self.adaptive_tolerance_grid_w
+    }
+    
+    #[wasm_bindgen(js_name = setAdaptiveToleranceGridH)]
+    pub fn set_adaptive_tolerance_grid_h(&mut self, v: u32) {
+        self.adaptive_tolerance_grid_h = v.clamp(4, 32);
+    }
+    
+    #[wasm_bindgen(js_name = getAdaptiveToleranceGridH)]
+    pub fn get_adaptive_tolerance_grid_h(&self) -> u32 {
+        self.adaptive_tolerance_grid_h
+    }
+    
+    #[wasm_bindgen(js_name = setAdaptiveToleranceSensitivity)]
+    pub fn set_adaptive_tolerance_sensitivity(&mut self, v: f32) {
+        self.adaptive_tolerance_sensitivity = v.clamp(0.0, 2.0);
+    }
+    
+    #[wasm_bindgen(js_name = getAdaptiveToleranceSensitivity)]
+    pub fn get_adaptive_tolerance_sensitivity(&self) -> f32 {
+        self.adaptive_tolerance_sensitivity
+    }
 }
 
 impl Default for WasmProcessParams {

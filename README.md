@@ -218,6 +218,13 @@ chroma-transparent input.png \
   --sharpen-amount 0.5 \
   --sharpen-radius 1.0 \
   --sharpen-threshold 0.0
+
+# 適応的許容範囲（照明ムラがある画像に有効）
+chroma-transparent input.png \
+  --adaptive-tolerance \
+  --adaptive-tolerance-grid-w 12 \
+  --adaptive-tolerance-grid-h 12 \
+  --adaptive-tolerance-sensitivity 1.2
 ```
 
 ## コマンドラインオプション
@@ -256,6 +263,10 @@ chroma-transparent input.png \
 | `--sharpen-amount` | - | エッジシャープニング: シャープニング強度 | `0.5` | 0.0 - 2.0 |
 | `--sharpen-radius` | - | エッジシャープニング: シャープニング半径 | `1.0` | 0.1 - 5.0 |
 | `--sharpen-threshold` | - | エッジシャープニング: シャープニング閾値 | `0.0` | 0.0 - 1.0 |
+| `--adaptive-tolerance` | - | 適応的許容範囲を有効化 | `false` | - |
+| `--adaptive-tolerance-grid-w` | - | 適応的許容範囲: グリッドサイズ（幅） | `8` | 4 - 32 |
+| `--adaptive-tolerance-grid-h` | - | 適応的許容範囲: グリッドサイズ（高さ） | `8` | 4 - 32 |
+| `--adaptive-tolerance-sensitivity` | - | 適応的許容範囲: 感度調整 | `1.0` | 0.0 - 2.0 |
 | `--verbose` | `-v` | 詳細ログを出力 | `false` | - |
 | `--help` | `-h` | ヘルプを表示 | - | - |
 | `--version` | `-V` | バージョンを表示 | - | - |
@@ -272,6 +283,38 @@ chroma-transparent input.png \
 | **0.3** | **デフォルト** - 一般的なグリーンバック |
 | 0.4 - 0.5 | 照明ムラがある背景 |
 | 0.6+ | 非常に不均一な背景（誤検出に注意） |
+
+### adaptive-tolerance（適応的許容範囲）
+
+画像をグリッド分割し、各領域の色分布を分析して最適なtolerance値を自動計算します。照明ムラがある画像や不均一な背景色を持つ画像での精度向上に有効です。
+
+```bash
+# 適応的許容範囲を有効化
+chroma-transparent input.png --adaptive-tolerance
+
+# グリッドサイズを指定（デフォルト: 8x8）
+chroma-transparent input.png \
+  --adaptive-tolerance \
+  --adaptive-tolerance-grid-w 16 \
+  --adaptive-tolerance-grid-h 16
+
+# 感度を調整（デフォルト: 1.0）
+chroma-transparent input.png \
+  --adaptive-tolerance \
+  --adaptive-tolerance-sensitivity 1.5
+```
+
+| パラメータ | 説明 | デフォルト値 | 範囲 |
+|-----------|------|------------|------|
+| `--adaptive-tolerance` | 適応的許容範囲を有効化 | `false` | - |
+| `--adaptive-tolerance-grid-w` | グリッドサイズ（幅） | `8` | 4 - 32 |
+| `--adaptive-tolerance-grid-h` | グリッドサイズ（高さ） | `8` | 4 - 32 |
+| `--adaptive-tolerance-sensitivity` | 感度調整 | `1.0` | 0.0 - 2.0 |
+
+**使用例**:
+- 照明ムラがある画像: `--adaptive-tolerance --adaptive-tolerance-sensitivity 1.2`
+- 不均一な背景色: `--adaptive-tolerance --adaptive-tolerance-grid-w 12 --adaptive-tolerance-grid-h 12`
+- 高精度が必要な場合: `--adaptive-tolerance --adaptive-tolerance-grid-w 16 --adaptive-tolerance-grid-h 16`
 
 ### feather（フェザリング量）
 
@@ -590,6 +633,7 @@ Web UIでは以下のパラメータを調整できます：
 - **基本パラメータ**: クロマキー色、許容範囲、フェザリング、デスピル、収縮/膨張
 - **色空間選択**: HSV、LAB、LCH、YUVから選択
 - **多色検出**: 複数の色を同時に検出（各色に許容範囲を設定）
+- **適応的許容範囲**: 画像領域ごとに最適な許容範囲を自動計算（照明ムラがある画像に有効）
 - **バイラテラルフィルタ**: エッジを保持しながらノイズを除去
 - **マルチスケール処理**: 複数の解像度で処理して統合
 - **マットエッジ最適化**: アルファチャンネルのエッジを最適化

@@ -127,6 +127,9 @@ pub struct ParameterRanges {
     pub sharpen_amount: ParameterRange,
     pub sharpen_radius: ParameterRange,
     pub sharpen_threshold: ParameterRange,
+    pub adaptive_tolerance_grid_w: ParameterRange,
+    pub adaptive_tolerance_grid_h: ParameterRange,
+    pub adaptive_tolerance_sensitivity: ParameterRange,
 }
 
 #[derive(Serialize)]
@@ -268,6 +271,24 @@ pub fn get_config(config: Arc<ServerConfig>) -> ConfigResponse {
                 max: 1.0,
                 default: 0.0,
                 step: 0.01,
+            },
+            adaptive_tolerance_grid_w: ParameterRange {
+                min: 4.0,
+                max: 32.0,
+                default: 8.0,
+                step: 1.0,
+            },
+            adaptive_tolerance_grid_h: ParameterRange {
+                min: 4.0,
+                max: 32.0,
+                default: 8.0,
+                step: 1.0,
+            },
+            adaptive_tolerance_sensitivity: ParameterRange {
+                min: 0.0,
+                max: 2.0,
+                default: 1.0,
+                step: 0.1,
             },
         },
         video_enabled: config.video_enabled,

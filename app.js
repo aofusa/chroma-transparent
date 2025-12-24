@@ -407,6 +407,72 @@ class ChromaProcessor {
         if (params.dilate !== undefined) {
             this.wasmParams.setDilate(parseInt(params.dilate, 10));
         }
+        
+        // 新規パラメータ
+        if (params.colorSpace !== undefined) {
+            this.wasmParams.setColorSpace(String(params.colorSpace));
+        }
+        if (params.bilateral !== undefined) {
+            this.wasmParams.setBilateralEnabled(params.bilateral.enabled || false);
+            if (params.bilateral.enabled) {
+                if (params.bilateral.spatialSigma !== undefined) {
+                    this.wasmParams.setBilateralSpatialSigma(parseFloat(params.bilateral.spatialSigma));
+                }
+                if (params.bilateral.colorSigma !== undefined) {
+                    this.wasmParams.setBilateralColorSigma(parseFloat(params.bilateral.colorSigma));
+                }
+                if (params.bilateral.radius !== undefined) {
+                    this.wasmParams.setBilateralRadius(parseInt(params.bilateral.radius, 10));
+                }
+            }
+        }
+        if (params.multiscale !== undefined) {
+            this.wasmParams.setMultiscaleEnabled(params.multiscale.enabled || false);
+            if (params.multiscale.enabled) {
+                if (params.multiscale.levels !== undefined) {
+                    this.wasmParams.setMultiscaleLevels(parseInt(params.multiscale.levels, 10));
+                }
+                if (params.multiscale.scaleFactor !== undefined) {
+                    this.wasmParams.setMultiscaleScaleFactor(parseFloat(params.multiscale.scaleFactor));
+                }
+            }
+        }
+        if (params.edgeOptimization !== undefined) {
+            this.wasmParams.setEdgeOptimizationEnabled(params.edgeOptimization.enabled || false);
+            if (params.edgeOptimization.enabled) {
+                if (params.edgeOptimization.threshold !== undefined) {
+                    this.wasmParams.setEdgeThreshold(parseFloat(params.edgeOptimization.threshold));
+                }
+                if (params.edgeOptimization.smoothness !== undefined) {
+                    this.wasmParams.setEdgeSmoothness(parseFloat(params.edgeOptimization.smoothness));
+                }
+            }
+        }
+        if (params.shadowRemoval !== undefined) {
+            this.wasmParams.setShadowRemovalEnabled(params.shadowRemoval.enabled || false);
+            if (params.shadowRemoval.enabled) {
+                if (params.shadowRemoval.threshold !== undefined) {
+                    this.wasmParams.setShadowThreshold(parseFloat(params.shadowRemoval.threshold));
+                }
+                if (params.shadowRemoval.strength !== undefined) {
+                    this.wasmParams.setShadowRemovalStrength(parseFloat(params.shadowRemoval.strength));
+                }
+            }
+        }
+        if (params.sharpen !== undefined) {
+            this.wasmParams.setSharpenEnabled(params.sharpen.enabled || false);
+            if (params.sharpen.enabled) {
+                if (params.sharpen.amount !== undefined) {
+                    this.wasmParams.setSharpenAmount(parseFloat(params.sharpen.amount));
+                }
+                if (params.sharpen.radius !== undefined) {
+                    this.wasmParams.setSharpenRadius(parseFloat(params.sharpen.radius));
+                }
+                if (params.sharpen.threshold !== undefined) {
+                    this.wasmParams.setSharpenThreshold(parseFloat(params.sharpen.threshold));
+                }
+            }
+        }
     }
     
     // === 統一API ===
@@ -588,6 +654,39 @@ class ChromaApp {
         this.despillSlider = document.getElementById('despill');
         this.erodeSlider = document.getElementById('erode');
         this.dilateSlider = document.getElementById('dilate');
+        this.colorSpaceSelect = document.getElementById('color-space');
+        
+        // 新規コントロール
+        this.multiColorEnabled = document.getElementById('multi-color-enabled');
+        this.multiColorList = document.getElementById('multi-color-list');
+        this.btnAddColor = document.getElementById('btn-add-color');
+        
+        this.bilateralEnabled = document.getElementById('bilateral-enabled');
+        this.bilateralParams = document.getElementById('bilateral-params');
+        this.bilateralSpatialSigma = document.getElementById('bilateral-spatial-sigma');
+        this.bilateralColorSigma = document.getElementById('bilateral-color-sigma');
+        this.bilateralRadius = document.getElementById('bilateral-radius');
+        
+        this.multiscaleEnabled = document.getElementById('multiscale-enabled');
+        this.multiscaleParams = document.getElementById('multiscale-params');
+        this.multiscaleLevels = document.getElementById('multiscale-levels');
+        this.multiscaleScaleFactor = document.getElementById('multiscale-scale-factor');
+        
+        this.edgeOptimizationEnabled = document.getElementById('edge-optimization-enabled');
+        this.edgeOptimizationParams = document.getElementById('edge-optimization-params');
+        this.edgeThreshold = document.getElementById('edge-threshold');
+        this.edgeSmoothness = document.getElementById('edge-smoothness');
+        
+        this.shadowRemovalEnabled = document.getElementById('shadow-removal-enabled');
+        this.shadowRemovalParams = document.getElementById('shadow-removal-params');
+        this.shadowThreshold = document.getElementById('shadow-threshold');
+        this.shadowRemovalStrength = document.getElementById('shadow-removal-strength');
+        
+        this.sharpenEnabled = document.getElementById('sharpen-enabled');
+        this.sharpenParams = document.getElementById('sharpen-params');
+        this.sharpenAmount = document.getElementById('sharpen-amount');
+        this.sharpenRadius = document.getElementById('sharpen-radius');
+        this.sharpenThreshold = document.getElementById('sharpen-threshold');
         
         // Buttons
         this.resetBtn = document.getElementById('reset-btn');
@@ -721,6 +820,76 @@ class ChromaApp {
         const sliders = [this.toleranceSlider, this.featherSlider, this.despillSlider, 
                         this.erodeSlider, this.dilateSlider];
         sliders.forEach(slider => {
+            slider.addEventListener('input', () => {
+                this.updateSliderValue(slider);
+                this.schedulePreview();
+            });
+        });
+        
+        // 色空間選択
+        this.colorSpaceSelect.addEventListener('change', () => this.schedulePreview());
+        
+        // 多色検出
+        this.multiColorEnabled.addEventListener('change', (e) => {
+            this.multiColorList.hidden = !e.target.checked;
+            this.schedulePreview();
+        });
+        this.btnAddColor.addEventListener('click', () => this.addMultiColor());
+        
+        // バイラテラルフィルタ
+        this.bilateralEnabled.addEventListener('change', (e) => {
+            this.bilateralParams.hidden = !e.target.checked;
+            this.schedulePreview();
+        });
+        [this.bilateralSpatialSigma, this.bilateralColorSigma, this.bilateralRadius].forEach(slider => {
+            slider.addEventListener('input', () => {
+                this.updateSliderValue(slider);
+                this.schedulePreview();
+            });
+        });
+        
+        // マルチスケール処理
+        this.multiscaleEnabled.addEventListener('change', (e) => {
+            this.multiscaleParams.hidden = !e.target.checked;
+            this.schedulePreview();
+        });
+        [this.multiscaleLevels, this.multiscaleScaleFactor].forEach(slider => {
+            slider.addEventListener('input', () => {
+                this.updateSliderValue(slider);
+                this.schedulePreview();
+            });
+        });
+        
+        // マットエッジ最適化
+        this.edgeOptimizationEnabled.addEventListener('change', (e) => {
+            this.edgeOptimizationParams.hidden = !e.target.checked;
+            this.schedulePreview();
+        });
+        [this.edgeThreshold, this.edgeSmoothness].forEach(slider => {
+            slider.addEventListener('input', () => {
+                this.updateSliderValue(slider);
+                this.schedulePreview();
+            });
+        });
+        
+        // 影の処理
+        this.shadowRemovalEnabled.addEventListener('change', (e) => {
+            this.shadowRemovalParams.hidden = !e.target.checked;
+            this.schedulePreview();
+        });
+        [this.shadowThreshold, this.shadowRemovalStrength].forEach(slider => {
+            slider.addEventListener('input', () => {
+                this.updateSliderValue(slider);
+                this.schedulePreview();
+            });
+        });
+        
+        // エッジシャープニング
+        this.sharpenEnabled.addEventListener('change', (e) => {
+            this.sharpenParams.hidden = !e.target.checked;
+            this.schedulePreview();
+        });
+        [this.sharpenAmount, this.sharpenRadius, this.sharpenThreshold].forEach(slider => {
             slider.addEventListener('input', () => {
                 this.updateSliderValue(slider);
                 this.schedulePreview();
@@ -1130,14 +1299,86 @@ class ChromaApp {
     }
 
     getParams() {
-        return {
+        const params = {
             color: this.getColor(),
             tolerance: parseFloat(this.toleranceSlider.value),
             feather: parseInt(this.featherSlider.value, 10),
             despill: parseFloat(this.despillSlider.value),
             erode: parseInt(this.erodeSlider.value, 10),
-            dilate: parseInt(this.dilateSlider.value, 10)
+            dilate: parseInt(this.dilateSlider.value, 10),
+            colorSpace: this.colorSpaceSelect.value,
         };
+        
+        // 多色検出（WASM側では未サポートのため、UIのみ対応）
+        // 将来的にWASM側でサポートされた際に使用可能
+        if (this.multiColorEnabled.checked) {
+            const multiColors = [];
+            const multiColorItems = this.multiColorList.querySelectorAll('.multi-color-item');
+            multiColorItems.forEach(item => {
+                const colorInput = item.querySelector('.multi-color-color');
+                const toleranceInput = item.querySelector('.multi-color-tolerance');
+                if (colorInput && toleranceInput) {
+                    multiColors.push({
+                        color: colorInput.value,
+                        tolerance: parseFloat(toleranceInput.value)
+                    });
+                }
+            });
+            if (multiColors.length > 0) {
+                params.multiColors = multiColors;
+                // 注意: WASM側では多色検出は未サポートのため、最初の色のみ使用
+                console.warn('Multi-color detection is not yet supported in WASM mode. Using first color only.');
+            }
+        }
+        
+        // バイラテラルフィルタ
+        if (this.bilateralEnabled.checked) {
+            params.bilateral = {
+                enabled: true,
+                spatialSigma: parseFloat(this.bilateralSpatialSigma.value),
+                colorSigma: parseFloat(this.bilateralColorSigma.value),
+                radius: parseInt(this.bilateralRadius.value, 10)
+            };
+        }
+        
+        // マルチスケール処理
+        if (this.multiscaleEnabled.checked) {
+            params.multiscale = {
+                enabled: true,
+                levels: parseInt(this.multiscaleLevels.value, 10),
+                scaleFactor: parseFloat(this.multiscaleScaleFactor.value)
+            };
+        }
+        
+        // マットエッジ最適化
+        if (this.edgeOptimizationEnabled.checked) {
+            params.edgeOptimization = {
+                enabled: true,
+                threshold: parseFloat(this.edgeThreshold.value),
+                smoothness: parseFloat(this.edgeSmoothness.value)
+            };
+        }
+        
+        // 影の処理
+        if (this.shadowRemovalEnabled.checked) {
+            params.shadowRemoval = {
+                enabled: true,
+                threshold: parseFloat(this.shadowThreshold.value),
+                strength: parseFloat(this.shadowRemovalStrength.value)
+            };
+        }
+        
+        // エッジシャープニング
+        if (this.sharpenEnabled.checked) {
+            params.sharpen = {
+                enabled: true,
+                amount: parseFloat(this.sharpenAmount.value),
+                radius: parseFloat(this.sharpenRadius.value),
+                threshold: parseFloat(this.sharpenThreshold.value)
+            };
+        }
+        
+        return params;
     }
 
     updateColorPreview() {
@@ -1194,12 +1435,83 @@ class ChromaApp {
         this.despillSlider.value = this.defaults.despill;
         this.erodeSlider.value = this.defaults.erode;
         this.dilateSlider.value = this.defaults.dilate;
+        
+        // 新規パラメータのリセット
+        this.colorSpaceSelect.value = 'hsv';
+        this.multiColorEnabled.checked = false;
+        this.multiColorList.hidden = true;
+        this.multiColorList.innerHTML = '';
+        
+        this.bilateralEnabled.checked = false;
+        this.bilateralParams.hidden = true;
+        this.bilateralSpatialSigma.value = 5.0;
+        this.bilateralColorSigma.value = 50.0;
+        this.bilateralRadius.value = 5;
+        
+        this.multiscaleEnabled.checked = false;
+        this.multiscaleParams.hidden = true;
+        this.multiscaleLevels.value = 3;
+        this.multiscaleScaleFactor.value = 0.5;
+        
+        this.edgeOptimizationEnabled.checked = false;
+        this.edgeOptimizationParams.hidden = true;
+        this.edgeThreshold.value = 0.1;
+        this.edgeSmoothness.value = 0.5;
+        
+        this.shadowRemovalEnabled.checked = false;
+        this.shadowRemovalParams.hidden = true;
+        this.shadowThreshold.value = 0.3;
+        this.shadowRemovalStrength.value = 0.7;
+        
+        this.sharpenEnabled.checked = false;
+        this.sharpenParams.hidden = true;
+        this.sharpenAmount.value = 0.5;
+        this.sharpenRadius.value = 1.0;
+        this.sharpenThreshold.value = 0.0;
 
         [this.toleranceSlider, this.featherSlider, this.despillSlider, 
          this.erodeSlider, this.dilateSlider].forEach(s => this.updateSliderValue(s));
+        
+        // 新規スライダーの更新
+        this.updateSliderValue(this.bilateralSpatialSigma);
+        this.updateSliderValue(this.bilateralColorSigma);
+        this.updateSliderValue(this.bilateralRadius);
+        this.updateSliderValue(this.multiscaleLevels);
+        this.updateSliderValue(this.multiscaleScaleFactor);
+        this.updateSliderValue(this.edgeThreshold);
+        this.updateSliderValue(this.edgeSmoothness);
+        this.updateSliderValue(this.shadowThreshold);
+        this.updateSliderValue(this.shadowRemovalStrength);
+        this.updateSliderValue(this.sharpenAmount);
+        this.updateSliderValue(this.sharpenRadius);
+        this.updateSliderValue(this.sharpenThreshold);
 
         this.updateColorPreview();
         this.updatePreview();
+    }
+    
+    addMultiColor() {
+        const item = document.createElement('div');
+        item.className = 'multi-color-item';
+        item.innerHTML = `
+            <input type="text" class="multi-color-color" placeholder="lime" value="lime">
+            <input type="number" class="multi-color-tolerance" placeholder="0.3" value="0.3" min="0" max="1" step="0.01">
+            <button type="button" class="btn-remove-color">×</button>
+        `;
+        
+        const removeBtn = item.querySelector('.btn-remove-color');
+        removeBtn.addEventListener('click', () => {
+            item.remove();
+            this.schedulePreview();
+        });
+        
+        [item.querySelector('.multi-color-color'), item.querySelector('.multi-color-tolerance')].forEach(input => {
+            input.addEventListener('input', () => this.schedulePreview());
+        });
+        
+        this.multiColorList.appendChild(item);
+        this.multiColorList.hidden = false;
+        this.multiColorEnabled.checked = true;
     }
 
     async processAndDownload() {

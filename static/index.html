@@ -219,6 +219,127 @@
                             <label for="dilate">膨張 <span id="dilate-value">1</span></label>
                             <input type="range" id="dilate" min="0" max="10" step="1" value="1">
                         </div>
+
+                        <!-- 色空間選択 -->
+                        <div class="param-group">
+                            <label for="color-space">色空間</label>
+                            <select id="color-space">
+                                <option value="hsv" selected>HSV</option>
+                                <option value="lab">LAB</option>
+                                <option value="lch">LCH</option>
+                                <option value="yuv">YUV</option>
+                            </select>
+                        </div>
+
+                        <!-- 多色検出セクション -->
+                        <div class="param-section">
+                            <div class="param-section-header">
+                                <input type="checkbox" id="multi-color-enabled">
+                                <label for="multi-color-enabled">多色検出</label>
+                                <button type="button" class="btn-add-color" id="btn-add-color">+ 色を追加</button>
+                            </div>
+                            <div class="multi-color-list" id="multi-color-list" hidden>
+                                <!-- 動的に追加される -->
+                            </div>
+                        </div>
+
+                        <!-- バイラテラルフィルタセクション -->
+                        <div class="param-section">
+                            <div class="param-section-header">
+                                <input type="checkbox" id="bilateral-enabled">
+                                <label for="bilateral-enabled">バイラテラルフィルタ</label>
+                            </div>
+                            <div class="param-section-content" id="bilateral-params" hidden>
+                                <div class="param-group">
+                                    <label for="bilateral-spatial-sigma">空間シグマ <span id="bilateral-spatial-sigma-value">5.0</span></label>
+                                    <input type="range" id="bilateral-spatial-sigma" min="1" max="20" step="0.1" value="5.0">
+                                </div>
+                                <div class="param-group">
+                                    <label for="bilateral-color-sigma">色シグマ <span id="bilateral-color-sigma-value">50.0</span></label>
+                                    <input type="range" id="bilateral-color-sigma" min="10" max="100" step="1" value="50.0">
+                                </div>
+                                <div class="param-group">
+                                    <label for="bilateral-radius">半径 <span id="bilateral-radius-value">5</span></label>
+                                    <input type="range" id="bilateral-radius" min="1" max="10" step="1" value="5">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- マルチスケール処理セクション -->
+                        <div class="param-section">
+                            <div class="param-section-header">
+                                <input type="checkbox" id="multiscale-enabled">
+                                <label for="multiscale-enabled">マルチスケール処理</label>
+                            </div>
+                            <div class="param-section-content" id="multiscale-params" hidden>
+                                <div class="param-group">
+                                    <label for="multiscale-levels">レベル数 <span id="multiscale-levels-value">3</span></label>
+                                    <input type="range" id="multiscale-levels" min="1" max="5" step="1" value="3">
+                                </div>
+                                <div class="param-group">
+                                    <label for="multiscale-scale-factor">スケール係数 <span id="multiscale-scale-factor-value">0.50</span></label>
+                                    <input type="range" id="multiscale-scale-factor" min="0.25" max="0.75" step="0.05" value="0.5">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- マットエッジ最適化セクション -->
+                        <div class="param-section">
+                            <div class="param-section-header">
+                                <input type="checkbox" id="edge-optimization-enabled">
+                                <label for="edge-optimization-enabled">マットエッジ最適化</label>
+                            </div>
+                            <div class="param-section-content" id="edge-optimization-params" hidden>
+                                <div class="param-group">
+                                    <label for="edge-threshold">エッジ閾値 <span id="edge-threshold-value">0.10</span></label>
+                                    <input type="range" id="edge-threshold" min="0" max="1" step="0.01" value="0.1">
+                                </div>
+                                <div class="param-group">
+                                    <label for="edge-smoothness">滑らかさ <span id="edge-smoothness-value">0.50</span></label>
+                                    <input type="range" id="edge-smoothness" min="0" max="1" step="0.01" value="0.5">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 影の処理セクション -->
+                        <div class="param-section">
+                            <div class="param-section-header">
+                                <input type="checkbox" id="shadow-removal-enabled">
+                                <label for="shadow-removal-enabled">影の処理</label>
+                            </div>
+                            <div class="param-section-content" id="shadow-removal-params" hidden>
+                                <div class="param-group">
+                                    <label for="shadow-threshold">影閾値 <span id="shadow-threshold-value">0.30</span></label>
+                                    <input type="range" id="shadow-threshold" min="0" max="1" step="0.01" value="0.3">
+                                </div>
+                                <div class="param-group">
+                                    <label for="shadow-removal-strength">除去強度 <span id="shadow-removal-strength-value">0.70</span></label>
+                                    <input type="range" id="shadow-removal-strength" min="0" max="1" step="0.01" value="0.7">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- エッジシャープニングセクション -->
+                        <div class="param-section">
+                            <div class="param-section-header">
+                                <input type="checkbox" id="sharpen-enabled">
+                                <label for="sharpen-enabled">エッジシャープニング</label>
+                            </div>
+                            <div class="param-section-content" id="sharpen-params" hidden>
+                                <div class="param-group">
+                                    <label for="sharpen-amount">強度 <span id="sharpen-amount-value">0.50</span></label>
+                                    <input type="range" id="sharpen-amount" min="0" max="2" step="0.1" value="0.5">
+                                </div>
+                                <div class="param-group">
+                                    <label for="sharpen-radius">半径 <span id="sharpen-radius-value">1.0</span></label>
+                                    <input type="range" id="sharpen-radius" min="0.1" max="5" step="0.1" value="1.0">
+                                </div>
+                                <div class="param-group">
+                                    <label for="sharpen-threshold">閾値 <span id="sharpen-threshold-value">0.00</span></label>
+                                    <input type="range" id="sharpen-threshold" min="0" max="1" step="0.01" value="0.0">
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="action-buttons">

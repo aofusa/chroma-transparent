@@ -404,6 +404,250 @@ export class WasmProcessParams {
     reset() {
         wasm.wasmprocessparams_reset(this.__wbg_ptr);
     }
+    /**
+     * @param {string} v
+     */
+    setColorSpace(v) {
+        const ptr0 = passStringToWasm0(v, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.wasmprocessparams_setColorSpace(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
+     * @returns {string}
+     */
+    getColorSpace() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmprocessparams_getColorSpace(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @param {boolean} v
+     */
+    setBilateralEnabled(v) {
+        wasm.wasmprocessparams_setBilateralEnabled(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {boolean}
+     */
+    getBilateralEnabled() {
+        const ret = wasm.wasmprocessparams_getBilateralEnabled(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * @param {number} v
+     */
+    setBilateralSpatialSigma(v) {
+        wasm.wasmprocessparams_setBilateralSpatialSigma(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {number}
+     */
+    getBilateralSpatialSigma() {
+        const ret = wasm.wasmprocessparams_getBilateralSpatialSigma(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {number} v
+     */
+    setBilateralColorSigma(v) {
+        wasm.wasmprocessparams_setBilateralColorSigma(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {number}
+     */
+    getBilateralColorSigma() {
+        const ret = wasm.wasmprocessparams_getBilateralColorSigma(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {number} v
+     */
+    setBilateralRadius(v) {
+        wasm.wasmprocessparams_setBilateralRadius(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {number}
+     */
+    getBilateralRadius() {
+        const ret = wasm.wasmprocessparams_getBilateralRadius(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @param {boolean} v
+     */
+    setMultiscaleEnabled(v) {
+        wasm.wasmprocessparams_setMultiscaleEnabled(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {boolean}
+     */
+    getMultiscaleEnabled() {
+        const ret = wasm.wasmprocessparams_getMultiscaleEnabled(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * @param {number} v
+     */
+    setMultiscaleLevels(v) {
+        wasm.wasmprocessparams_setMultiscaleLevels(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {number}
+     */
+    getMultiscaleLevels() {
+        const ret = wasm.wasmprocessparams_getMultiscaleLevels(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @param {number} v
+     */
+    setMultiscaleScaleFactor(v) {
+        wasm.wasmprocessparams_setMultiscaleScaleFactor(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {number}
+     */
+    getMultiscaleScaleFactor() {
+        const ret = wasm.wasmprocessparams_getMultiscaleScaleFactor(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {boolean} v
+     */
+    setEdgeOptimizationEnabled(v) {
+        wasm.wasmprocessparams_setEdgeOptimizationEnabled(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {boolean}
+     */
+    getEdgeOptimizationEnabled() {
+        const ret = wasm.wasmprocessparams_getEdgeOptimizationEnabled(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * @param {number} v
+     */
+    setEdgeThreshold(v) {
+        wasm.wasmprocessparams_setEdgeThreshold(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {number}
+     */
+    getEdgeThreshold() {
+        const ret = wasm.wasmprocessparams_getEdgeThreshold(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {number} v
+     */
+    setEdgeSmoothness(v) {
+        wasm.wasmprocessparams_setEdgeSmoothness(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {number}
+     */
+    getEdgeSmoothness() {
+        const ret = wasm.wasmprocessparams_getEdgeSmoothness(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {boolean} v
+     */
+    setShadowRemovalEnabled(v) {
+        wasm.wasmprocessparams_setShadowRemovalEnabled(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {boolean}
+     */
+    getShadowRemovalEnabled() {
+        const ret = wasm.wasmprocessparams_getShadowRemovalEnabled(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * @param {number} v
+     */
+    setShadowThreshold(v) {
+        wasm.wasmprocessparams_setShadowThreshold(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {number}
+     */
+    getShadowThreshold() {
+        const ret = wasm.wasmprocessparams_getShadowThreshold(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {number} v
+     */
+    setShadowRemovalStrength(v) {
+        wasm.wasmprocessparams_setShadowRemovalStrength(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {number}
+     */
+    getShadowRemovalStrength() {
+        const ret = wasm.wasmprocessparams_getShadowRemovalStrength(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {boolean} v
+     */
+    setSharpenEnabled(v) {
+        wasm.wasmprocessparams_setSharpenEnabled(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {boolean}
+     */
+    getSharpenEnabled() {
+        const ret = wasm.wasmprocessparams_getSharpenEnabled(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * @param {number} v
+     */
+    setSharpenAmount(v) {
+        wasm.wasmprocessparams_setSharpenAmount(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {number}
+     */
+    getSharpenAmount() {
+        const ret = wasm.wasmprocessparams_getSharpenAmount(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {number} v
+     */
+    setSharpenRadius(v) {
+        wasm.wasmprocessparams_setSharpenRadius(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {number}
+     */
+    getSharpenRadius() {
+        const ret = wasm.wasmprocessparams_getSharpenRadius(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {number} v
+     */
+    setSharpenThreshold(v) {
+        wasm.wasmprocessparams_setSharpenThreshold(this.__wbg_ptr, v);
+    }
+    /**
+     * @returns {number}
+     */
+    getSharpenThreshold() {
+        const ret = wasm.wasmprocessparams_getSharpenThreshold(this.__wbg_ptr);
+        return ret;
+    }
 }
 
 async function __wbg_load(module, imports) {

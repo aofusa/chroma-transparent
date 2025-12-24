@@ -254,15 +254,15 @@ fn build_config(params: &WasmProcessParams) -> Result<ProcessConfig, JsValue> {
     let chroma_color = Rgb::from_color_spec(&params.color)
         .map_err(|e| JsValue::from_str(&format!("Invalid color: {}", e)))?;
 
-    Ok(ProcessConfig {
-        chroma_color,
-        tolerance: params.tolerance,
-        feather_amount: params.feather,
-        despill_strength: params.despill,
-        erode_iterations: params.erode,
-        dilate_iterations: params.dilate,
-        verbose: false,
-    })
+    let mut config = ProcessConfig::default();
+    config.chroma_color = chroma_color;
+    config.tolerance = params.tolerance;
+    config.feather_amount = params.feather;
+    config.despill_strength = params.despill;
+    config.erode_iterations = params.erode;
+    config.dilate_iterations = params.dilate;
+    
+    Ok(config)
 }
 
 /// 画像をリサイズ

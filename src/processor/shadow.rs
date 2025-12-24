@@ -30,7 +30,8 @@ pub fn remove_shadows(
 
     let (width, height) = mask.dimensions();
     let w = width as usize;
-    let _h = height as usize;
+    #[allow(unused_variables)] // parallel feature無効時のみ使用
+    let h = height as usize;
     let mask_raw = mask.as_raw();
     let _image_raw = image.as_raw();
 
@@ -75,7 +76,8 @@ pub fn remove_shadows(
 fn calculate_luminance(image: &RgbaImage) -> GrayImage {
     let (width, height) = image.dimensions();
     let w = width as usize;
-    let _h = height as usize;
+    #[allow(unused_variables)] // parallel feature無効時のみ使用
+    let h = height as usize;
     let src = image.as_raw();
     let mut result = vec![0u8; (width * height) as usize];
 
@@ -122,7 +124,7 @@ fn calculate_luminance(image: &RgbaImage) -> GrayImage {
 fn detect_shadows(luminance: &GrayImage, threshold: f32) -> GrayImage {
     let (width, height) = luminance.dimensions();
     let _w = width as usize;
-    let h = height as usize;
+    let _h = height as usize;
     let src = luminance.as_raw();
 
     // 平均明度を計算

@@ -15,9 +15,10 @@ use log::debug;
 use crate::config::ProcessConfig;
 use crate::processor::alpha::apply_alpha_inplace;
 use crate::processor::{
-    bilateral_filter_alpha, create_alpha_from_mask, create_chroma_mask, create_multi_chroma_mask,
-    create_multiscale_mask, despill, dilate, erode, feather_alpha, optimize_edge, remove_shadows,
-    sharpen,
+    apply_estimated_parameters, bilateral_filter_alpha, create_adaptive_tolerance_map,
+    create_alpha_from_mask, create_chroma_mask, create_multi_chroma_mask,
+    create_multiscale_mask, despill, detect_thin_lines, dilate, erode, estimate_parameters,
+    feather_alpha, optimize_edge, remove_shadows, sharpen, DespillMethod, EdgeDetectionMethod,
 };
 
 /// クロマキー処理パイプライン
@@ -37,8 +38,31 @@ impl ChromaPipeline {
     pub fn process(&self, image: &RgbaImage) -> RgbaImage {
         debug!("Processing started (optimized)...");
 
+        // 0. 自動パラメータ推定（有効時）
+        let mut config = self.config.clone();
+        if config.auto_params_enabled {
+            let estimated = estimate_parameters(image, &config.chroma_color);
+            apply_estimated_parameters(&mut config, &estimated);
+            debug!("Auto parameters estimated");
+        }
+
         // 1. クロマキーマスク生成（改善A, B, D, F適用）
-        let mask = if self.config.multiscale_enabled {
+        // 適応的許容範囲を使用する場合
+        let tolerance_map = if config.adaptive_tolerance_enabled {
+            Some(create_adaptive_tolerance_map(
+                image,
+                &config.chroma_color,
+                config.tolerance,
+                (config.adaptive_tolerance_grid_w, config.adaptive_tolerance_grid_h),
+                config.adaptive_tolerance_sensitivity,
+            ))
+        } else {
+            None
+        };
+        
+        // 注意: 適応的許容範囲を使用する場合、mask.rsを拡張する必要がある
+        // 現在は固定toleranceを使用
+        let mask = if config.multiscale_enabled {
             // マルチスケール処理
             create_multiscale_mask(
                 image,
@@ -48,26 +72,41 @@ impl ChromaPipeline {
                 self.config.multiscale_scale_factor,
                 self.config.color_space,
             )
-        } else if let Some(ref multi_colors) = self.config.multi_colors {
+        } else if let Some(ref multi_colors) = config.multi_colors {
             // 多色検出
-            create_multi_chroma_mask(image, multi_colors, self.config.color_space)
+            create_multi_chroma_mask(image, multi_colors, config.color_space)
         } else {
             // 単色検出（既存の処理）
-            create_chroma_mask(image, &self.config.chroma_color, self.config.tolerance, self.config.color_space)
+            create_chroma_mask(image, &config.chroma_color, config.tolerance, config.color_space)
         };
         debug!("Mask generation completed");
 
+        // 1.5. 細線検出（有効時）
+        let mask = if config.thin_line_detection_enabled {
+            let result = detect_thin_lines(
+                image,
+                &mask,
+                &config.chroma_color,
+                config.thin_line_sensitivity,
+                config.thin_line_threshold,
+            );
+            debug!("Thin line detection completed");
+            result
+        } else {
+            mask
+        };
+
         // 2. 影の処理（有効時）
-        let mask = if self.config.shadow_removal_enabled {
+        let mask = if config.shadow_removal_enabled {
             let result = remove_shadows(
                 &mask,
                 image,
-                self.config.shadow_threshold,
-                self.config.shadow_removal_strength,
+                config.shadow_threshold,
+                config.shadow_removal_strength,
             );
             debug!(
                 "Shadow removal completed (threshold={}, strength={})",
-                self.config.shadow_threshold, self.config.shadow_removal_strength
+                config.shadow_threshold, config.shadow_removal_strength
             );
             result
         } else {
@@ -75,22 +114,22 @@ impl ChromaPipeline {
         };
 
         // 3. モルフォロジー演算（改善A, C, D適用）
-        let mask = if self.config.erode_iterations > 0 {
-            let result = erode(&mask, self.config.erode_iterations);
+        let mask = if config.erode_iterations > 0 {
+            let result = erode(&mask, config.erode_iterations);
             debug!(
                 "Erode completed ({} iterations)",
-                self.config.erode_iterations
+                config.erode_iterations
             );
             result
         } else {
             mask
         };
 
-        let mask = if self.config.dilate_iterations > 0 {
-            let result = dilate(&mask, self.config.dilate_iterations);
+        let mask = if config.dilate_iterations > 0 {
+            let result = dilate(&mask, config.dilate_iterations);
             debug!(
                 "Dilate completed ({} iterations)",
-                self.config.dilate_iterations
+                config.dilate_iterations
             );
             result
         } else {
@@ -102,15 +141,16 @@ impl ChromaPipeline {
         debug!("Alpha channel generation completed");
 
         // 4.5. マットエッジ最適化（有効時）
-        let alpha_channel = if self.config.edge_optimization_enabled {
+        let alpha_channel = if config.edge_optimization_enabled {
             let result = optimize_edge(
                 &alpha_channel,
-                self.config.edge_threshold,
-                self.config.edge_smoothness,
+                config.edge_threshold,
+                config.edge_smoothness,
+                config.edge_detection_method,
             );
             debug!(
-                "Edge optimization completed (threshold={}, smoothness={})",
-                self.config.edge_threshold, self.config.edge_smoothness
+                "Edge optimization completed (threshold={}, smoothness={}, method={:?})",
+                config.edge_threshold, config.edge_smoothness, config.edge_detection_method
             );
             result
         } else {
@@ -118,11 +158,11 @@ impl ChromaPipeline {
         };
 
         // 5. フェザリング（改善A, D適用）
-        let alpha_channel = if self.config.feather_amount > 0 {
-            let result = feather_alpha(&alpha_channel, self.config.feather_amount);
+        let alpha_channel = if config.feather_amount > 0 {
+            let result = feather_alpha(&alpha_channel, config.feather_amount);
             debug!(
                 "Feathering completed (amount={})",
-                self.config.feather_amount
+                config.feather_amount
             );
             result
         } else {
@@ -130,16 +170,16 @@ impl ChromaPipeline {
         };
 
         // 5.5. バイラテラルフィルタ（有効時）
-        let alpha_channel = if self.config.bilateral_enabled {
+        let alpha_channel = if config.bilateral_enabled {
             let result = bilateral_filter_alpha(
                 &alpha_channel,
-                self.config.bilateral_spatial_sigma,
-                self.config.bilateral_color_sigma,
-                self.config.bilateral_radius,
+                config.bilateral_spatial_sigma,
+                config.bilateral_color_sigma,
+                config.bilateral_radius,
             );
             debug!(
                 "Bilateral filter completed (spatial_sigma={}, color_sigma={})",
-                self.config.bilateral_spatial_sigma, self.config.bilateral_color_sigma
+                config.bilateral_spatial_sigma, config.bilateral_color_sigma
             );
             result
         } else {
@@ -148,30 +188,31 @@ impl ChromaPipeline {
 
         // 6. デスピル処理（改善A, D, G適用：インプレース）
         let mut result = image.clone();
-        if self.config.despill_strength > 0.0 {
+        if config.despill_strength > 0.0 {
             despill(
                 &mut result,
                 &mask,
-                self.config.despill_strength,
-                &self.config.chroma_color,
+                config.despill_strength,
+                &config.chroma_color,
+                config.despill_method,
             );
             debug!(
-                "Despill completed (strength={})",
-                self.config.despill_strength
+                "Despill completed (strength={}, method={:?})",
+                config.despill_strength, config.despill_method
             );
         }
 
         // 7. エッジシャープニング（有効時）
-        if self.config.sharpen_enabled {
+        if config.sharpen_enabled {
             result = sharpen(
                 &result,
-                self.config.sharpen_amount,
-                self.config.sharpen_radius,
-                self.config.sharpen_threshold,
+                config.sharpen_amount,
+                config.sharpen_radius,
+                config.sharpen_threshold,
             );
             debug!(
                 "Sharpen completed (amount={}, radius={})",
-                self.config.sharpen_amount, self.config.sharpen_radius
+                config.sharpen_amount, config.sharpen_radius
             );
         }
 

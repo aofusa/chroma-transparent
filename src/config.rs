@@ -4,6 +4,7 @@
 use crate::cli::Args;
 use crate::color::{ColorSpace, Rgb};
 use crate::error::{ChromaError, Result};
+use crate::processor::{DespillMethod, EdgeDetectionMethod};
 
 /// 多色検出用の色設定
 #[derive(Debug, Clone)]
@@ -74,6 +75,37 @@ pub struct ProcessConfig {
     pub sharpen_radius: f32,
     /// エッジシャープニング: シャープニング閾値
     pub sharpen_threshold: f32,
+    
+    /// 適応的許容範囲有効/無効
+    pub adaptive_tolerance_enabled: bool,
+    /// 適応的許容範囲: グリッドサイズ（幅）
+    pub adaptive_tolerance_grid_w: u32,
+    /// 適応的許容範囲: グリッドサイズ（高さ）
+    pub adaptive_tolerance_grid_h: u32,
+    /// 適応的許容範囲: 感度調整
+    pub adaptive_tolerance_sensitivity: f32,
+    
+    /// エッジ検出方法
+    pub edge_detection_method: EdgeDetectionMethod,
+    /// Cannyエッジ検出: 低閾値
+    pub canny_low_threshold: f32,
+    /// Cannyエッジ検出: 高閾値
+    pub canny_high_threshold: f32,
+    /// Cannyエッジ検出: ガウシアンシグマ
+    pub canny_gaussian_sigma: f32,
+    
+    /// デスピル方法
+    pub despill_method: DespillMethod,
+    
+    /// 細線検出有効/無効
+    pub thin_line_detection_enabled: bool,
+    /// 細線検出: 感度
+    pub thin_line_sensitivity: f32,
+    /// 細線検出: 検出閾値
+    pub thin_line_threshold: f32,
+    
+    /// 自動パラメータ推定有効/無効
+    pub auto_params_enabled: bool,
 }
 
 impl Default for ProcessConfig {
@@ -112,6 +144,24 @@ impl Default for ProcessConfig {
             sharpen_amount: 0.5,
             sharpen_radius: 1.0,
             sharpen_threshold: 0.0,
+            
+            adaptive_tolerance_enabled: false,
+            adaptive_tolerance_grid_w: 8,
+            adaptive_tolerance_grid_h: 8,
+            adaptive_tolerance_sensitivity: 1.0,
+            
+            edge_detection_method: EdgeDetectionMethod::Sobel,
+            canny_low_threshold: 0.1,
+            canny_high_threshold: 0.3,
+            canny_gaussian_sigma: 1.0,
+            
+            despill_method: DespillMethod::Basic,
+            
+            thin_line_detection_enabled: false,
+            thin_line_sensitivity: 0.5,
+            thin_line_threshold: 0.3,
+            
+            auto_params_enabled: false,
         }
     }
 }
